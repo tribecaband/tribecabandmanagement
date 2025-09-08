@@ -52,90 +52,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const TIMEOUT_MS = 30000; // 30 seconds timeout
 
   useEffect(() => {
-    debugLog('Initializing AuthContext');
-    
-    // Get initial session with aggressive timeout and fallback
+    let mounted = true;
+
     const initializeAuth = async () => {
       try {
-        debugLog('Getting initial session...');
-        
-        // Create timeout promise for session (15 seconds)
-        const sessionTimeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Session timeout')), 15000);
-        });
-        
-        let session = null;
-        let sessionError = null;
-        
-        try {
-          const result = await Promise.race([
-            supabase.auth.getSession(),
-            sessionTimeoutPromise
-          ]) as any;
-          session = result.data?.session;
-          sessionError = result.error;
-        } catch (timeoutErr) {
-          debugError('Session retrieval timed out, trying alternative approach:', timeoutErr);
-          
-          // Fallback: try to get user directly
-          try {
-            const { data: { user }, error: userError } = await Promise.race([
-              supabase.auth.getUser(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('User timeout')), 10000))
-            ]) as any;
-            
-            if (user && !userError) {
-              debugLog('Got user via fallback method:', { userId: user.id });
-              setUser(user);
-              await loadUserProfile(user.id);
-              return;
-            }
-          } catch (userErr) {
-            debugError('Fallback user retrieval also failed:', userErr);
-          }
-          
-          // Final fallback: assume no session and continue
-          debugLog('All session retrieval methods failed, assuming no session');
+        setLoading(true);
+        console.log('🔄 Inicializando autenticación...');
+
+        // Obtener sesión de forma directa sin timeouts excesivos
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error('❌ Error al obtener sesión:', sessionError);
           setSession(null);
           setUser(null);
           setLoading(false);
           return;
         }
-        
-        if (sessionError) {
-          debugError('Error getting initial session:', sessionError);
-          setError('Error al obtener la sesión inicial');
-          setLoading(false);
-          return;
-        }
-        
-        debugLog('Initial session obtained:', { hasUser: !!session?.user });
-        setSession(session);
-        setUser(session?.user ?? null);
-        
+
         if (session?.user) {
-          await loadUserProfile(session.user.id);
+          console.log('✅ Sesión encontrada:', session.user.email);
+          setSession(session);
+          setUser(session.user);
+
+          // Cargar perfil de forma directa
+          try {
+            await loadUserProfile(session.user.id);
+          } catch (error) {
+            console.error('❌ Error al cargar perfil:', error);
+          }
         } else {
-          debugLog('No user in session, setting loading to false');
+          console.log('ℹ️ No hay sesión activa');
+          setSession(null);
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('❌ Error en inicialización:', error);
+        if (mounted) {
+          setSession(null);
+          setUser(null);
+        }
+      } finally {
+        if (mounted) {
           setLoading(false);
         }
-      } catch (err) {
-        debugError('Unexpected error during auth initialization:', err);
-        setError('Error inesperado durante la inicialización');
-        setLoading(false);
       }
     };
-    
-    // Initialize with timeout
-    const timeoutId = setTimeout(() => {
-      debugError('Auth initialization timeout');
-      setError('Tiempo de espera agotado durante la inicialización');
-      setLoading(false);
-    }, TIMEOUT_MS);
-    
-    initializeAuth().finally(() => {
-      clearTimeout(timeoutId);
-    });
+
+    initializeAuth();
 
     // Listen for auth changes
     const {
@@ -147,7 +111,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setError(null); // Clear previous errors
       
       if (session?.user) {
-        await loadUserProfile(session.user.id);
+        // Check if we're in an invitation flow and should skip profile loading
+        const isInInvitationFlow = window.location.pathname === '/auth/callback' && 
+                                   window.location.hash.includes('type=invite');
+        
+        if (isInInvitationFlow) {
+          debugLog('In invitation flow, skipping profile load for now');
+          setLoading(false);
+        } else {
+          try {
+            await loadUserProfile(session.user.id);
+          } catch (error) {
+            console.error('Error loading profile:', error);
+          } finally {
+            setLoading(false);
+          }
+        }
       } else {
         debugLog('User logged out, clearing profile and permissions');
         setProfile(null);
@@ -162,237 +141,150 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const loadUserProfile = async (userId: string, attempt: number = 1) => {
-    debugLog(`Loading user profile (attempt ${attempt}/${MAX_RETRIES})`, { userId });
-    
+  const loadUserProfile = async (userId: string) => {
     try {
-      setLoading(true);
-      setError(null);
+      console.log('🔄 Cargando perfil de usuario:', userId);
       
-      console.log('[AuthContext DEBUG] Starting profile load for user:', userId);
-      
-      // Create timeout promise
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS);
-      });
-      
-      // Obtener información del usuario autenticado con timeout
-      debugLog('Getting authenticated user info...');
-      const getUserPromise = supabase.auth.getUser();
-      const { data: { user } } = await Promise.race([
-        getUserPromise,
-        timeoutPromise
-      ]) as any;
-      
-      if (!user) {
-        throw new Error('No authenticated user found');
-      }
-      debugLog('Authenticated user info retrieved', { userId: user.id });
-      
-      // Load user profile with timeout
-      debugLog('Fetching user profile from database...');
-      const profilePromise = supabase
+      const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', userId)
         .single();
-      
-      const { data: profileData, error: profileError } = await Promise.race([
-        profilePromise,
-        timeoutPromise
-      ]) as any;
 
-      // Si no existe el perfil, crearlo automáticamente
-      if (profileError && profileError.code === 'PGRST116') {
-        debugLog('No profile found, creating new profile...');
-        const { data: newProfile, error: createProfileError } = await Promise.race([
-          supabase
-            .from('user_profiles')
-            .insert({
-              id: userId,
-              email: user?.email || '',
-              full_name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuario',
-              role: 'user'
-            })
-            .select()
-            .single(),
-          timeoutPromise
-        ]) as any;
-
-        if (createProfileError) {
-          debugError('Error creating profile:', createProfileError);
-          throw new Error(`Error creando perfil: ${createProfileError.message}`);
-        }
-        debugLog('New profile created successfully');
-        setProfile({
-          ...newProfile,
-          permissions: null
-        });
-      } else if (profileError) {
-        debugError('Error loading profile:', profileError);
-        console.error('[AuthContext DEBUG] Profile fetch error:', profileError);
-        throw new Error(`Error cargando perfil: ${profileError.message}`);
-      } else {
-        debugLog('Profile loaded successfully');
-        console.log('[AuthContext DEBUG] Profile data received:', profileData);
-        console.log('[AuthContext DEBUG] Profile role from database:', profileData?.role);
-        console.log('[AuthContext DEBUG] Profile email from database:', profileData?.email);
-        setProfile(profileData);
+      if (error) {
+        console.error('❌ Error al cargar perfil:', error);
+        throw error;
       }
 
-      // Load user permissions with timeout
-      debugLog('Fetching user permissions from database...');
-      const permissionsPromise = supabase
+      console.log('✅ Perfil cargado exitosamente:', profile.email);
+      setProfile(profile);
+      await loadUserPermissions(userId);
+    } catch (error) {
+      console.error('❌ Error al cargar perfil del usuario:', error);
+      setError('Error al cargar el perfil del usuario');
+      throw error;
+    }
+  };
+
+  const loadUserPermissions = async (userId: string) => {
+    try {
+      console.log('🔄 Cargando permisos de usuario:', userId);
+      
+      const { data: permissions, error } = await supabase
         .from('user_permissions')
         .select('*')
         .eq('user_id', userId)
         .single();
-      
-      const { data: permissionsData, error: permissionsError } = await Promise.race([
-        permissionsPromise,
-        timeoutPromise
-      ]) as any;
 
-      // Si no existen los permisos, crearlos automáticamente
-      if (permissionsError && permissionsError.code === 'PGRST116') {
-        debugLog('No permissions found, creating default permissions...');
-        const { data: newPermissions, error: createPermissionsError } = await Promise.race([
-          supabase
-            .from('user_permissions')
-            .insert({
-              user_id: userId,
-              can_create_events: false,
-              can_edit_events: false,
-              can_delete_events: false,
-              can_view_accounting: false,
-              can_manage_users: false
-            })
-            .select()
-            .single(),
-          timeoutPromise
-        ]) as any;
-
-        if (createPermissionsError) {
-          debugError('Error creating permissions:', createPermissionsError);
-          throw new Error(`Error creando permisos: ${createPermissionsError.message}`);
-        }
-        debugLog('Default permissions created successfully');
-        setPermissions(newPermissions);
-        
-        // Update profile with permissions
-        setProfile(prev => prev ? {
-          ...prev,
-          permissions: newPermissions
-        } : null);
-      } else if (permissionsError) {
-        debugError('Error loading permissions:', permissionsError);
-        throw new Error(`Error cargando permisos: ${permissionsError.message}`);
-      } else {
-        debugLog('Permissions loaded successfully');
-        setPermissions(permissionsData);
-        
-        // Update profile with permissions
-        setProfile(prev => prev ? {
-          ...prev,
-          permissions: permissionsData
-        } : null);
+      if (error) {
+        console.error('❌ Error al cargar permisos:', error);
+        throw error;
       }
 
-      debugLog('User profile loading completed successfully');
-      setLoading(false);
-      setRetryCount(0); // Reset retry count on success
-      
-    } catch (error: any) {
-      debugError(`Error loading user data (attempt ${attempt}):`, error);
-      
-      if (attempt < MAX_RETRIES && error.message !== 'Timeout') {
-        debugLog(`Retrying in 2 seconds... (${attempt + 1}/${MAX_RETRIES})`);
-        setRetryCount(attempt);
-        setTimeout(() => {
-          loadUserProfile(userId, attempt + 1);
-        }, 2000);
-      } else {
-        // Final fallback - set minimal working state
-        debugError('Max retries reached or timeout, setting fallback state');
-        setError(error.message || 'Error cargando datos del usuario');
-        
-        // Set minimal fallback data to unblock the UI
-        if (!profile) {
-          // Check if we have user info from invitation process
-          let fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuario';
-          let email = user?.email || '';
-          
-          try {
-            const storedUserInfo = sessionStorage.getItem('userInfoForProfile');
-            if (storedUserInfo) {
-              const userInfo = JSON.parse(storedUserInfo);
-              // Use stored info if it's recent (within 5 minutes)
-              if (Date.now() - userInfo.updatedAt < 5 * 60 * 1000) {
-                fullName = userInfo.full_name || fullName;
-                email = userInfo.email || email;
-                console.log('[AuthContext] Using stored user info:', userInfo);
-                // Clean up after use
-                sessionStorage.removeItem('userInfoForProfile');
-              }
-            }
-          } catch (e) {
-            debugError('Error parsing stored user info:', e);
-          }
-          
-          setProfile({
-            id: userId,
-            email: email,
-            full_name: fullName,
-            role: 'user',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            permissions: null
-          });
-        }
-        
-        if (!permissions) {
-          const fallbackPermissions = {
-            id: 'fallback',
-            user_id: userId,
-            can_create_events: false,
-            can_edit_events: false,
-            can_delete_events: false,
-            can_view_accounting: false,
-            can_manage_users: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          setPermissions(fallbackPermissions);
-        }
-        
-        setLoading(false);
-      }
+      console.log('✅ Permisos cargados exitosamente');
+      setPermissions(permissions);
+    } catch (error) {
+      console.error('❌ Error al cargar permisos del usuario:', error);
+      throw error;
     }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        setError(error.message);
+        return { success: false, error: error.message };
+      }
+      
+      if (data.user) {
+        // Cargar perfil de usuario inmediatamente
+        await loadUserProfile(data.user.id);
+        return { success: true };
+      }
+      
+      return { success: false, error: 'No se recibieron datos del usuario' };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error inesperado durante el inicio de sesión';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
         },
-      },
-    });
-    return { error };
+      });
+      
+      if (error) {
+        setError(error.message);
+        return { success: false, error: error.message };
+      }
+      
+      if (data.user) {
+        // Si el usuario está confirmado, cargar perfil inmediatamente
+        if (data.user.email_confirmed_at) {
+          await loadUserProfile(data.user.id);
+        }
+        
+        return { success: true, user: data.user };
+      }
+      
+      return { success: false, error: 'No se recibieron datos del usuario' };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error inesperado durante el registro';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        setError(error.message);
+        return { success: false, error: error.message };
+      }
+      
+      // Limpiar estado inmediatamente
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setPermissions(null);
+      setError(null);
+      
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error inesperado durante el cierre de sesión';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
   };
 
   const refreshProfile = async () => {

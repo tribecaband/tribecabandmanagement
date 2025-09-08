@@ -275,79 +275,75 @@ const AdminPage: React.FC = () => {
   }, []);
 
   const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
+    if (error) {
       toast.error('Error al cargar usuarios');
-    } finally {
-      setLoading(false);
+    } else {
+      setUsers(data || []);
     }
+    setLoading(false);
   };
 
   const handleSaveUser = async (userData: UserProfile) => {
-    try {
-      if (selectedUser) {
-        // Update existing user
-        const { error } = await supabase
-          .from('user_profiles')
-          .update({
-            full_name: userData.full_name,
-            role: userData.role,
-            is_active: userData.is_active,
-            permissions: userData.permissions
-          })
-          .eq('id', selectedUser.id);
+    if (selectedUser) {
+      // Update existing user
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          full_name: userData.full_name,
+          role: userData.role,
+          is_active: userData.is_active,
+          permissions: userData.permissions
+        })
+        .eq('id', selectedUser.id);
 
-        if (error) throw error;
-        toast.success('Usuario actualizado correctamente');
-      } else {
-        // Send invitation email for new user
-        if (!userData.email || !userData.full_name) {
-          toast.error('Email y nombre son obligatorios para invitar usuarios');
-          return;
-        }
-
-        const response = await fetch('/api/invite-user', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: userData.email,
-            full_name: userData.full_name,
-            role: userData.role || 'user',
-            permissions: userData.permissions || {
-              events: { read: true, write: false, delete: false },
-              accounting: { read: false, write: false, delete: false },
-              admin: { read: false, write: false, delete: false }
-            }
-          })
-        });
-
-        const result = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(result.error || 'Error al enviar invitación');
-        }
-        
-        toast.success('Invitación enviada correctamente al email del usuario');
+      if (error) {
+        toast.error('Error al actualizar usuario');
+        return;
+      }
+      toast.success('Usuario actualizado correctamente');
+    } else {
+      // Send invitation email for new user
+      if (!userData.email || !userData.full_name) {
+        toast.error('Email y nombre son obligatorios para invitar usuarios');
+        return;
       }
 
-      fetchUsers();
-      setIsModalOpen(false);
-      setSelectedUser(null);
-    } catch (error) {
-      console.error('Error saving user:', error);
-      toast.error(selectedUser ? 'Error al actualizar usuario' : 'Error al enviar invitación');
+      const response = await fetch('/api/invite-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: userData.email,
+          full_name: userData.full_name,
+          role: userData.role || 'user',
+          permissions: userData.permissions || {
+            events: { read: true, write: false, delete: false },
+            accounting: { read: false, write: false, delete: false },
+            admin: { read: false, write: false, delete: false }
+          }
+        })
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        toast.error(result.error || 'Error al enviar invitación');
+        return;
+      }
+      
+      toast.success('Invitación enviada correctamente al email del usuario');
     }
+
+    fetchUsers();
+    setIsModalOpen(false);
+    setSelectedUser(null);
   };
 
   const handleDeleteUser = async (userId: string) => {
@@ -355,35 +351,33 @@ const AdminPage: React.FC = () => {
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .delete()
-        .eq('id', userId);
+    const { error } = await supabase
+      .from('user_profiles')
+      .delete()
+      .eq('id', userId);
 
-      if (error) throw error;
-      toast.success('Usuario eliminado correctamente');
-      fetchUsers();
-    } catch (error) {
-      console.error('Error deleting user:', error);
+    if (error) {
       toast.error('Error al eliminar usuario');
+      return;
     }
+    
+    toast.success('Usuario eliminado correctamente');
+    fetchUsers();
   };
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ is_active: !currentStatus })
-        .eq('id', userId);
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ is_active: !currentStatus })
+      .eq('id', userId);
 
-      if (error) throw error;
-      toast.success(`Usuario ${!currentStatus ? 'activado' : 'desactivado'} correctamente`);
-      fetchUsers();
-    } catch (error) {
-      console.error('Error updating user status:', error);
+    if (error) {
       toast.error('Error al actualizar estado del usuario');
+      return;
     }
+    
+    toast.success(`Usuario ${!currentStatus ? 'activado' : 'desactivado'} correctamente`);
+    fetchUsers();
   };
 
   const filteredUsers = users.filter(user => {

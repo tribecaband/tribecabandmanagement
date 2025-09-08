@@ -3,10 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const AuthCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isSettingPassword, setIsSettingPassword] = useState(false);
   const [password, setPassword] = useState('');
@@ -18,6 +20,7 @@ const AuthCallback: React.FC = () => {
   const [error, setError] = useState('');
   const [isInvitation, setIsInvitation] = useState(false);
   const [hasProcessedInvitation, setHasProcessedInvitation] = useState(false);
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
     const handleAuthCallback = async () => {
@@ -28,100 +31,98 @@ const AuthCallback: React.FC = () => {
       console.log('AuthCallback: Pathname:', window.location.pathname);
       console.log('AuthCallback: hasProcessedInvitation:', hasProcessedInvitation);
       
-      // Prevent multiple processing of the same invitation
-      // Use a more specific check that accounts for the UI state
+      // Prevenir procesamiento múltiple
       if (hasProcessedInvitation && isSettingPassword) {
-        console.log('AuthCallback: Already processing invitation and showing form, skipping');
+        console.log('AuthCallback: Ya procesando invitación, omitiendo');
         return;
       }
       
       try {
-        // Check for errors in URL parameters first
+        // Verificar errores en parámetros URL primero
         const urlParams = new URLSearchParams(window.location.search);
         const error = urlParams.get('error');
         const errorDescription = urlParams.get('error_description');
         
         if (error) {
-          console.error('AuthCallback: Error in URL params:', error, errorDescription);
+          console.error('AuthCallback: Error en parámetros URL:', error, errorDescription);
           setError(errorDescription || 'Error en la autenticación');
           setLoading(false);
           return;
         }
 
-        // Handle Supabase Auth callback with hash parameters (OAuth, magic links, etc.)
+        // Manejar callback de Supabase con parámetros hash
         const hash = window.location.hash;
         if (hash && hash.includes('access_token')) {
-          console.log('AuthCallback: Processing Supabase auth hash');
+          console.log('AuthCallback: Procesando hash de autenticación');
           
-          // Check if this is an invitation by looking at the hash
+          // Verificar si es invitación por el hash
           const isInviteInHash = hash.includes('type=invite');
-          console.log('AuthCallback: Is invitation in hash?', isInviteInHash);
+          console.log('AuthCallback: ¿Es invitación en hash?', isInviteInHash);
           
           if (isInviteInHash) {
-            console.log('AuthCallback: This is an invitation, processing...');
+            console.log('AuthCallback: Procesando invitación...');
             
-            // Extract the access token from the hash to get user info
+            // Extraer token de acceso del hash
             const hashParams = new URLSearchParams(hash.substring(1));
             const accessToken = hashParams.get('access_token');
             
             if (accessToken) {
-              console.log('AuthCallback: Access token found, getting user info');
+              console.log('AuthCallback: Token encontrado, obteniendo info usuario');
               
-              // Get user info from the token
+              // Obtener info del usuario desde el token
               const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
               
               if (userError) {
-                console.error('AuthCallback: Error getting user from token:', userError);
+                console.error('AuthCallback: Error obteniendo usuario:', userError);
                 setError('Error al obtener información del usuario');
                 setLoading(false);
                 return;
               }
               
               if (user) {
-                console.log('AuthCallback: User obtained from token:', user.email);
-                console.log('AuthCallback: User metadata:', user.user_metadata);
+                console.log('AuthCallback: Usuario obtenido:', user.email);
                 
-                // Extract user info from metadata
+                // Extraer información del usuario
                 const email = user.email || '';
                 const fullName = user.user_metadata?.full_name || user.user_metadata?.name || '';
                 
-                console.log('AuthCallback: Extracted - email:', email, 'fullName:', fullName);
+                console.log('AuthCallback: Extraído - email:', email, 'fullName:', fullName);
                 
-                // Set up password form for invitation
+                // Configurar formulario de contraseña
                 setUserEmail(email);
                 setUserFullName(fullName);
                 setIsInvitation(true);
                 setHasProcessedInvitation(true);
                 setLoading(false);
                 
-                // Wait a brief moment to ensure state is set, then show form
+                // Mostrar formulario después de configurar estado
                 setTimeout(() => {
-                  console.log('AuthCallback: Showing password setup form');
+                  console.log('AuthCallback: Mostrando formulario de contraseña');
                   setIsSettingPassword(true);
                 }, 100);
                 return;
               }
             } else {
-              console.error('AuthCallback: No access token found in hash');
+              console.error('AuthCallback: Token de acceso no encontrado');
               setError('Token de acceso no encontrado');
               setLoading(false);
               return;
             }
           } else {
-            console.log('AuthCallback: Regular auth callback, letting Supabase handle session');
+            console.log('AuthCallback: Callback regular, manejando sesión');
             
-            // Let Supabase handle the session from the hash for regular login
+            // Manejar sesión para login regular
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             
             if (sessionError) {
-              console.error('AuthCallback: Session error:', sessionError);
+              console.error('AuthCallback: Error de sesión:', sessionError);
               setError('Error al establecer la sesión');
               setLoading(false);
               return;
             }
 
             if (session?.user) {
-              console.log('AuthCallback: Regular login successful, redirecting to dashboard');
+              console.log('AuthCallback: Login exitoso, redirigiendo');
               toast.success('¡Bienvenido! Sesión iniciada correctamente.');
               navigate('/dashboard');
               return;
@@ -129,40 +130,40 @@ const AuthCallback: React.FC = () => {
           }
         }
 
-        // Handle search parameter invitations (fallback for older format)
+        // Manejar invitaciones por parámetros de búsqueda (formato anterior)
         const token = searchParams.get('token');
         const tokenHash = searchParams.get('token_hash');
         const type = searchParams.get('type');
         
-        console.log('AuthCallback: Search params analysis:');
-        console.log('  - token:', !!token, token ? '(present)' : '(missing)');
-        console.log('  - token_hash:', !!tokenHash, tokenHash ? '(present)' : '(missing)');
+        console.log('AuthCallback: Análisis parámetros búsqueda:');
+        console.log('  - token:', !!token, token ? '(presente)' : '(ausente)');
+        console.log('  - token_hash:', !!tokenHash, tokenHash ? '(presente)' : '(ausente)');
         console.log('  - type:', type);
 
         if (tokenHash && type === 'invite') {
-          console.log('AuthCallback: Processing invitation with search param token_hash');
+          console.log('AuthCallback: Procesando invitación con token_hash');
           setError('Este formato de invitación ya no es compatible. Por favor, solicita una nueva invitación.');
           setLoading(false);
           return;
         }
 
-        // Only check for existing session if it's not an invitation flow
+        // Solo verificar sesión existente si no es flujo de invitación
         if (!isInvitation) {
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           
           if (sessionError) {
-            console.error('AuthCallback: Error getting session:', sessionError);
+            console.error('AuthCallback: Error obteniendo sesión:', sessionError);
           }
 
           if (session?.user) {
-            console.log('AuthCallback: User already authenticated, redirecting to dashboard');
+            console.log('AuthCallback: Usuario ya autenticado, redirigiendo');
             navigate('/dashboard');
             return;
           }
 
-          // If no valid auth flow detected, redirect to login
-          console.log('AuthCallback: No valid authentication flow detected, redirecting to login');
-          console.log('AuthCallback: Final state - isInvitation:', isInvitation);
+          // Sin flujo válido detectado, redirigir a login
+          console.log('AuthCallback: Sin flujo válido, redirigiendo a login');
+          console.log('AuthCallback: Estado final - isInvitation:', isInvitation);
           navigate('/login');
         }
         
@@ -190,6 +191,7 @@ const AuthCallback: React.FC = () => {
     }
 
     setLoading(true);
+    setStatus('Estableciendo contraseña...');
 
     try {
       console.log('Setting password for user:', userEmail);
@@ -246,21 +248,19 @@ const AuthCallback: React.FC = () => {
             sessionStorage.setItem('userInfoForProfile', JSON.stringify(userInfo));
             console.log('Stored user info in session storage:', userInfo);
             
-            toast.success('Contraseña establecida correctamente. Redirigiendo...');
-            
             // Clear the hash from URL to clean up
             window.history.replaceState(null, '', window.location.pathname);
             
-            // Wait for user profile to be created/updated before redirecting
-            console.log('Password updated, waiting for profile update...');
+            // Trigger profile loading now that password is set
+            console.log('Password updated, triggering profile refresh...');
+            await refreshProfile();
             
             // Clean up session storage
             sessionStorage.removeItem('userInfoForProfile');
             
-            setTimeout(() => {
-              console.log('Redirecting to dashboard...');
-              navigate('/dashboard');
-            }, 3000); // Give more time for the profile to load
+            console.log('Profile refreshed, redirecting to dashboard...');
+            toast.success('¡Bienvenido! Configuración completada.');
+            navigate('/dashboard');
             return;
           }
         }
@@ -282,6 +282,7 @@ const AuthCallback: React.FC = () => {
         }
 
         console.log('Password updated successfully');
+        setStatus('¡Contraseña establecida! Redirigiendo al panel...');
         toast.success('Contraseña establecida correctamente. Redirigiendo...');
         
         // Redirect to dashboard after successful password setup
@@ -298,6 +299,7 @@ const AuthCallback: React.FC = () => {
       console.error('Error setting password:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al establecer la contraseña';
       toast.error(errorMessage);
+      setStatus('');
       setLoading(false);
     }
   };
@@ -364,6 +366,13 @@ const AuthCallback: React.FC = () => {
             )}
           </div>
 
+          {status && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-center">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-3 flex-shrink-0 animate-pulse"></div>
+              {status}
+            </div>
+          )}
+
           <form className="mt-8 space-y-6" onSubmit={handleSetPassword}>
             <div className="space-y-4">
               <div>
@@ -428,13 +437,13 @@ const AuthCallback: React.FC = () => {
             <div>
               <button
                 type="submit"
-                disabled={loading || !password || !confirmPassword}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                disabled={loading || !password || !confirmPassword || password !== confirmPassword}
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 {loading ? (
                   <div className="flex items-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Estableciendo contraseña...
+                    Procesando...
                   </div>
                 ) : (
                   'Establecer Contraseña'

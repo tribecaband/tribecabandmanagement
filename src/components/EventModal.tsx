@@ -48,12 +48,12 @@ const EventModal: React.FC<EventModalProps> = ({
   // Load event types
   useEffect(() => {
     const loadEventTypes = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('event_types')
         .select('name')
         .order('name');
       
-      if (data) {
+      if (!error && data) {
         setEventTypes(data.map(type => type.name));
       }
     };
@@ -124,41 +124,43 @@ const EventModal: React.FC<EventModalProps> = ({
     
     setLoading(true);
 
-    try {
-      const eventData = {
-        ...formData,
-        // Add coordinates (mock for now - will be enhanced with geolocation)
-        latitud: 40.4168, // Madrid coordinates as default
-        longitud: -3.7038
-      };
+    const eventData = {
+      ...formData,
+      // Add coordinates (mock for now - will be enhanced with geolocation)
+      latitud: 40.4168, // Madrid coordinates as default
+      longitud: -3.7038
+    };
 
-      if (isEditing && event) {
-        // Update existing event
-        const { error } = await supabase
-          .from('events')
-          .update(eventData)
-          .eq('id', event.id);
+    if (isEditing && event) {
+      // Update existing event
+      const { error } = await supabase
+        .from('events')
+        .update(eventData)
+        .eq('id', event.id);
 
-        if (error) throw error;
-        toast.success('Evento actualizado correctamente');
-      } else {
-        // Create new event
-        const { error } = await supabase
-          .from('events')
-          .insert([eventData]);
-
-        if (error) throw error;
-        toast.success('Evento creado correctamente');
+      if (error) {
+        toast.error('Error al guardar el evento');
+        setLoading(false);
+        return;
       }
+      toast.success('Evento actualizado correctamente');
+    } else {
+      // Create new event
+      const { error } = await supabase
+        .from('events')
+        .insert([eventData]);
 
-      onSave();
-      onClose();
-    } catch (error) {
-      console.error('Error saving event:', error);
-      toast.error('Error al guardar el evento');
-    } finally {
-      setLoading(false);
+      if (error) {
+        toast.error('Error al guardar el evento');
+        setLoading(false);
+        return;
+      }
+      toast.success('Evento creado correctamente');
     }
+
+    setLoading(false);
+    onSave();
+    onClose();
   };
 
   const handleInputChange = (field: keyof EventFormData, value: any) => {

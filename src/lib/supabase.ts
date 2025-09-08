@@ -10,12 +10,26 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Cliente de Supabase
+// Cliente de Supabase con configuración optimizada
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false // Deshabilitado para manejar manualmente las invitaciones
+    detectSessionInUrl: false, // Deshabilitado para manejar manualmente las invitaciones
+    flowType: 'pkce' // Usar PKCE para mejor rendimiento
+  },
+  global: {
+    headers: {
+      'x-client-info': 'tribeca-band-management'
+    }
+  },
+  db: {
+    schema: 'public'
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
   }
 });
 

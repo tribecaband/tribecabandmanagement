@@ -55,22 +55,18 @@ const EventsPage: React.FC = () => {
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('events')
-        .delete()
-        .eq('id', eventId);
+    const { error } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', eventId);
 
-      if (error) {
-        throw error;
-      }
-
-      toast.success('Evento eliminado correctamente');
-      refetch();
-    } catch (error) {
-      console.error('Error deleting event:', error);
+    if (error) {
       toast.error('Error al eliminar el evento');
+      return;
     }
+
+    toast.success('Evento eliminado correctamente');
+    refetch();
   };
 
   const getStatusColor = (facturacion: string) => {

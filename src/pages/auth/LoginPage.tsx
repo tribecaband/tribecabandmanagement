@@ -15,6 +15,7 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
 
   const from = (location.state as any)?.from?.pathname || '/dashboard';
 
@@ -26,14 +27,18 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setStatus('Verificando credenciales...');
 
-    try {
-      await signIn(formData.email, formData.password);
-    } catch (err) {
-      setError('Credenciales inválidas. Por favor, verifica tu email y contraseña.');
-    } finally {
-      setLoading(false);
+    const result = await signIn(formData.email, formData.password);
+    
+    if (!result.success) {
+      setError(result.error || 'Credenciales inválidas. Por favor, verifica tu email y contraseña.');
+      setStatus('');
+    } else {
+      setStatus('¡Acceso concedido! Redirigiendo...');
     }
+    
+    setLoading(false);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,8 +71,16 @@ export const LoginPage: React.FC = () => {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-alert/10 border border-alert/20 text-alert px-4 py-3 rounded-lg">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center">
+              <div className="w-2 h-2 bg-red-500 rounded-full mr-3 flex-shrink-0"></div>
               {error}
+            </div>
+          )}
+          
+          {status && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-center">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-3 flex-shrink-0 animate-pulse"></div>
+              {status}
             </div>
           )}
 
@@ -121,11 +134,11 @@ export const LoginPage: React.FC = () => {
           <div>
             <Button
               type="submit"
-              className="w-full"
+              className="w-full transition-all duration-200"
               loading={loading}
-              disabled={!formData.email || !formData.password}
+              disabled={!formData.email || !formData.password || loading}
             >
-              Iniciar Sesión
+              {loading ? 'Verificando...' : 'Iniciar Sesión'}
             </Button>
           </div>
 
