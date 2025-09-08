@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 3;
-  const TIMEOUT_MS = 10000; // 10 seconds timeout
+  const TIMEOUT_MS = 30000; // 30 seconds timeout
 
   useEffect(() => {
     debugLog('Initializing AuthContext');
@@ -59,9 +59,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         debugLog('Getting initial session...');
         
-        // Create shorter timeout promise for session (5 seconds)
+        // Create timeout promise for session (15 seconds)
         const sessionTimeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Session timeout')), 5000);
+          setTimeout(() => reject(new Error('Session timeout')), 15000);
         });
         
         let session = null;
@@ -81,7 +81,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           try {
             const { data: { user }, error: userError } = await Promise.race([
               supabase.auth.getUser(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('User timeout')), 3000))
+              new Promise((_, reject) => setTimeout(() => reject(new Error('User timeout')), 10000))
             ]) as any;
             
             if (user && !userError) {
@@ -211,7 +211,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             .insert({
               id: userId,
               email: user?.email || '',
-              full_name: user?.user_metadata?.full_name || 'Usuario',
+              full_name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuario',
               role: 'user'
             })
             .select()
@@ -321,7 +321,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setProfile({
             id: userId,
             email: user?.email || '',
-            full_name: user?.user_metadata?.full_name || 'Usuario',
+            full_name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuario',
             role: 'user',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),

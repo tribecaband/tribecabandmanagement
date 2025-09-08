@@ -14,15 +14,27 @@ const AuthCallback: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [userFullName, setUserFullName] = useState('');
   const [error, setError] = useState('');
   const [isInvitation, setIsInvitation] = useState(false);
+  const [hasProcessedInvitation, setHasProcessedInvitation] = useState(() => {
+    return sessionStorage.getItem('invitationProcessed') === 'true';
+  });
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      console.log('AuthCallback: Starting auth callback handling');
+      console.log('=== AuthCallback: Starting auth callback handling ===');
       console.log('AuthCallback: Current URL:', window.location.href);
       console.log('AuthCallback: Search params:', window.location.search);
       console.log('AuthCallback: Hash:', window.location.hash);
+      console.log('AuthCallback: Pathname:', window.location.pathname);
+      console.log('AuthCallback: hasProcessedInvitation:', hasProcessedInvitation);
+      
+      // Prevent multiple processing of the same invitation
+      if (hasProcessedInvitation) {
+        console.log('AuthCallback: Already processed invitation, skipping');
+        return;
+      }
       
       try {
         // Check for errors in URL parameters first
@@ -42,89 +54,93 @@ const AuthCallback: React.FC = () => {
         if (hash && hash.includes('access_token')) {
           console.log('AuthCallback: Processing Supabase auth hash');
           
-          // Let Supabase handle the session from the hash
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          // Check if this is an invitation by looking at the hash
+          const isInviteInHash = hash.includes('type=invite');
+          console.log('AuthCallback: Is invitation in hash?', isInviteInHash);
           
-          if (sessionError) {
-            console.error('AuthCallback: Session error:', sessionError);
-            setError('Error al establecer la sesión');
-            setLoading(false);
-            return;
-          }
-
-          if (session?.user) {
-            console.log('AuthCallback: Session established successfully, redirecting to dashboard');
-            toast.success('¡Bienvenido! Sesión iniciada correctamente.');
-            navigate('/dashboard');
-            return;
-          }
-        }
-
-        // Handle invitation tokens from search parameters
-        const token = searchParams.get('token');
-        const tokenHash = searchParams.get('token_hash');
-        const type = searchParams.get('type');
-        
-        console.log('AuthCallback: URL params - token:', !!token, 'token_hash:', !!tokenHash, 'type:', type);
-
-        if (tokenHash && type === 'invite') {
-          console.log('AuthCallback: Processing invitation with token_hash');
-          
-          try {
-            // Manejar manualmente la sesión desde la URL para invitaciones
-            const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+          if (isInviteInHash) {
+            console.log('AuthCallback: This is an invitation, processing...');
             
-            if (error) {
-              console.error('AuthCallback: Error exchanging code for session:', error);
-              // Si no es un código válido, intentar obtener la sesión actual
-              const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+            // Extract the access token from the hash to get user info
+            const hashParams = new URLSearchParams(hash.substring(1));
+            const accessToken = hashParams.get('access_token');
+            
+            if (accessToken) {
+              console.log('AuthCallback: Access token found, getting user info');
               
-              if (sessionError || !sessionData.session) {
-                setError('Error al procesar la autenticación');
+              // Get user info from the token
+              const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
+              
+              if (userError) {
+                console.error('AuthCallback: Error getting user from token:', userError);
+                setError('Error al obtener información del usuario');
                 setLoading(false);
                 return;
               }
               
-              // Si hay una sesión válida y no es una invitación, redirigir
-              if (sessionData.session && !isInvitation) {
-                console.log('AuthCallback: Session established successfully, redirecting to dashboard');
-                toast.success('¡Bienvenido! Sesión iniciada correctamente.');
-                navigate('/dashboard');
+              if (user) {
+                console.log('AuthCallback: User obtained from token:', user.email);
+                console.log('AuthCallback: User metadata:', user.user_metadata);
+                
+                // Extract user info from metadata
+                const email = user.email || '';
+                const fullName = user.user_metadata?.full_name || user.user_metadata?.name || '';
+                
+                console.log('AuthCallback: Extracted - email:', email, 'fullName:', fullName);
+                
+                // Set up password form for invitation
+                setUserEmail(email);
+                setUserFullName(fullName);
+                setIsInvitation(true);
+                setIsSettingPassword(true);
+                setHasProcessedInvitation(true);
+                sessionStorage.setItem('invitationProcessed', 'true');
+                setLoading(false);
                 return;
               }
-            } else if (data.session) {
-              // Nueva sesión creada desde el código de invitación
-              console.log('AuthCallback: New session created from invitation code');
+            } else {
+              console.error('AuthCallback: No access token found in hash');
+              setError('Token de acceso no encontrado');
+              setLoading(false);
+              return;
             }
-
-            // For invitations, we need to verify the token but NOT automatically sign in
-            // Instead, we'll show the password setup form
-            const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-              token_hash: tokenHash,
-              type: 'invite'
-            });
-
-            if (verifyError) {
-              console.error('AuthCallback: Error verifying invitation:', verifyError);
-              setError('El enlace de invitación no es válido o ha expirado');
+          } else {
+            console.log('AuthCallback: Regular auth callback, letting Supabase handle session');
+            
+            // Let Supabase handle the session from the hash for regular login
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            
+            if (sessionError) {
+              console.error('AuthCallback: Session error:', sessionError);
+              setError('Error al establecer la sesión');
               setLoading(false);
               return;
             }
 
-            if (verifyData.user) {
-              console.log('AuthCallback: Invitation verified, showing password setup');
-              setUserEmail(verifyData.user.email || '');
-              setIsInvitation(true);
-              setIsSettingPassword(true);
-              setLoading(false);
+            if (session?.user) {
+              console.log('AuthCallback: Regular login successful, redirecting to dashboard');
+              toast.success('¡Bienvenido! Sesión iniciada correctamente.');
+              navigate('/dashboard');
               return;
             }
-          } catch (verifyError: any) {
-            console.error('AuthCallback: Exception during invitation verification:', verifyError);
-            setError('Error al procesar la invitación');
-            setLoading(false);
-            return;
           }
+        }
+
+        // Handle search parameter invitations (fallback for older format)
+        const token = searchParams.get('token');
+        const tokenHash = searchParams.get('token_hash');
+        const type = searchParams.get('type');
+        
+        console.log('AuthCallback: Search params analysis:');
+        console.log('  - token:', !!token, token ? '(present)' : '(missing)');
+        console.log('  - token_hash:', !!tokenHash, tokenHash ? '(present)' : '(missing)');
+        console.log('  - type:', type);
+
+        if (tokenHash && type === 'invite') {
+          console.log('AuthCallback: Processing invitation with search param token_hash');
+          setError('Este formato de invitación ya no es compatible. Por favor, solicita una nueva invitación.');
+          setLoading(false);
+          return;
         }
 
         // Only check for existing session if it's not an invitation flow
@@ -143,10 +159,11 @@ const AuthCallback: React.FC = () => {
 
           // If no valid auth flow detected, redirect to login
           console.log('AuthCallback: No valid authentication flow detected, redirecting to login');
+          console.log('AuthCallback: Final state - isInvitation:', isInvitation);
           navigate('/login');
         }
         
-      } catch (error: any) {
+      } catch (error) {
         console.error('AuthCallback: Unexpected error:', error);
         setError('Error inesperado durante la autenticación');
         setLoading(false);
@@ -154,7 +171,7 @@ const AuthCallback: React.FC = () => {
     };
 
     handleAuthCallback();
-  }, [navigate, searchParams]);
+  }, [navigate, searchParams, isInvitation, hasProcessedInvitation]);
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,22 +189,112 @@ const AuthCallback: React.FC = () => {
     setLoading(true);
 
     try {
-      // Update the user's password
-      const { error } = await supabase.auth.updateUser({
-        password: password
-      });
-
-      if (error) throw error;
-
-      toast.success('Contraseña establecida correctamente. Redirigiendo...');
+      console.log('Setting password for user:', userEmail);
       
-      // Redirect to dashboard after successful password setup
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
+      // First, we need to establish a session using the token from the hash
+      const hash = window.location.hash;
+      if (hash) {
+        const hashParams = new URLSearchParams(hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        
+        if (accessToken && refreshToken) {
+          console.log('Using tokens from hash to set session');
+          
+          // Set the session with the tokens
+          const { data: { session }, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (sessionError) {
+            throw new Error(`Error estableciendo sesión: ${sessionError.message}`);
+          }
+          
+          if (session) {
+            console.log('Session established, now updating password and user metadata');
+            
+            // Update the password and ensure user metadata is preserved
+            const updateData: any = { password: password };
+            
+            // Preserve user metadata including full_name
+            if (userFullName) {
+              updateData.data = {
+                full_name: userFullName
+              };
+            }
+            
+            console.log('Updating user with data:', updateData);
+            
+            const { error: updateError } = await supabase.auth.updateUser(updateData);
+
+            if (updateError) {
+              throw updateError;
+            }
+
+            console.log('Password and metadata updated successfully');
+            
+            // Store user info in sessionStorage for AuthContext to use
+            const userInfo = {
+              email: userEmail,
+              full_name: userFullName,
+              updatedAt: Date.now()
+            };
+            sessionStorage.setItem('userInfoForProfile', JSON.stringify(userInfo));
+            console.log('Stored user info in session storage:', userInfo);
+            
+            toast.success('Contraseña establecida correctamente. Redirigiendo...');
+            
+            // Clear the hash from URL to clean up
+            window.history.replaceState(null, '', window.location.pathname);
+            
+            // Wait for user profile to be created/updated before redirecting
+            console.log('Password updated, waiting for profile update...');
+            
+            // Clean up session storage
+            sessionStorage.removeItem('invitationProcessed');
+            
+            setTimeout(() => {
+              console.log('Redirecting to dashboard...');
+              navigate('/dashboard');
+            }, 3000); // Give more time for the profile to load
+            return;
+          }
+        }
+      }
+      
+      // Fallback: check for existing session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session && session.user.email === userEmail) {
+        console.log('Using existing session to update password');
+        
+        // User is authenticated, update their password
+        const { error: updateError } = await supabase.auth.updateUser({
+          password: password
+        });
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        console.log('Password updated successfully');
+        toast.success('Contraseña establecida correctamente. Redirigiendo...');
+        
+        // Redirect to dashboard after successful password setup
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 2000);
+        
+      } else {
+        // No session available
+        throw new Error('Sesión expirada. Por favor, usa el enlace de invitación nuevamente.');
+      }
+      
     } catch (error) {
       console.error('Error setting password:', error);
-      toast.error('Error al establecer la contraseña');
+      const errorMessage = error instanceof Error ? error.message : 'Error al establecer la contraseña';
+      toast.error(errorMessage);
       setLoading(false);
     }
   };
@@ -240,9 +347,16 @@ const AuthCallback: React.FC = () => {
               Bienvenido/a. Por favor, establece tu contraseña para completar el registro.
             </p>
             {userEmail && (
-              <div className="mt-4 flex items-center justify-center text-sm text-gray-500">
-                <Mail className="h-4 w-4 mr-2" />
-                {userEmail}
+              <div className="mt-4 space-y-2">
+                {userFullName && (
+                  <div className="flex items-center justify-center text-sm font-medium text-gray-700">
+                    <span>Bienvenido/a, {userFullName}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-center text-sm text-gray-500">
+                  <Mail className="h-4 w-4 mr-2" />
+                  {userEmail}
+                </div>
               </div>
             )}
           </div>

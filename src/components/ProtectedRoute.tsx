@@ -38,7 +38,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // Si no requiere autenticación y hay usuario, redirigir al dashboard
-  if (!requireAuth && user) {
+  // EXCEPCIÓN: permitir /auth/callback para procesar invitaciones
+  if (!requireAuth && user && location.pathname !== '/auth/callback') {
     return <Navigate to="/dashboard" replace />;
   }
 
