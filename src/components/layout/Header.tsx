@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Bell, User, LogOut, Settings, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import {
   DropdownMenu,
@@ -13,6 +14,8 @@ import {
 export const Header: React.FC = () => {
   const { profile, signOut, refreshProfile } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const navigate = useNavigate();
   
   // Debug log para verificar el perfil
   console.log('[Header DEBUG] Current profile:', profile);
@@ -28,7 +31,24 @@ export const Header: React.FC = () => {
   console.log('[Header DEBUG] Will display name:', displayName);
 
   const handleSignOut = async () => {
-    await signOut();
+    try {
+      setIsLoggingOut(true);
+      console.log('[Header] Iniciando logout...');
+      
+      const result = await signOut();
+      
+      if (result?.success !== false) {
+        console.log('[Header] Logout exitoso, redirigiendo...');
+        // Forzar navegación inmediata a login
+        navigate('/login', { replace: true });
+      } else {
+        console.error('[Header] Error en logout:', result?.error);
+      }
+    } catch (error) {
+      console.error('[Header] Error inesperado en logout:', error);
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const handleRefreshProfile = async () => {
@@ -113,9 +133,9 @@ export const Header: React.FC = () => {
                 <span>{isRefreshing ? 'Actualizando...' : 'Actualizar Perfil'}</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Cerrar sesión</span>
+              <DropdownMenuItem onClick={handleSignOut} disabled={isLoggingOut}>
+                <LogOut className={`mr-2 h-4 w-4 ${isLoggingOut ? 'animate-spin' : ''}`} />
+                <span>{isLoggingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

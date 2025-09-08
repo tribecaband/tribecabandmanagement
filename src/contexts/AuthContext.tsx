@@ -53,6 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     let mounted = true;
+    let authSubscription: any = null;
 
     const initializeAuth = async () => {
       try {
@@ -64,13 +65,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         if (sessionError) {
           console.error('❌ Error al obtener sesión:', sessionError);
-          setSession(null);
-          setUser(null);
-          setLoading(false);
+          if (mounted) {
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+          }
           return;
         }
 
-        if (session?.user) {
+        if (session?.user && mounted) {
           console.log('✅ Sesión encontrada:', session.user.email);
           setSession(session);
           setUser(session.user);
@@ -81,7 +84,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           } catch (error) {
             console.error('❌ Error al cargar perfil:', error);
           }
-        } else {
+        } else if (mounted) {
           console.log('ℹ️ No hay sesión activa');
           setSession(null);
           setUser(null);
@@ -102,10 +105,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
 
     // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
       debugLog('Auth state changed:', { event, hasUser: !!session?.user });
+      
+      // Evitar procesamiento durante logout manual
+      if (event === 'SIGNED_OUT') {
+        debugLog('User signed out, clearing all state');
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setPermissions(null);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
       setError(null); // Clear previous errors
@@ -124,20 +140,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           } catch (error) {
             console.error('Error loading profile:', error);
           } finally {
-            setLoading(false);
+            if (mounted) {
+              setLoading(false);
+            }
           }
         }
       } else {
         debugLog('User logged out, clearing profile and permissions');
         setProfile(null);
         setPermissions(null);
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     });
 
     return () => {
+      mounted = false;
       debugLog('Cleaning up auth subscription');
-      subscription.unsubscribe();
+      if (authSubscription?.data?.subscription) {
+        authSubscription.data.subscription.unsubscribe();
+      }
     };
   }, []);
 
@@ -261,29 +284,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
+      console.log('🔄 Iniciando proceso de logout...');
       setLoading(true);
       
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        setError(error.message);
-        return { success: false, error: error.message };
-      }
-      
-      // Limpiar estado inmediatamente
+      // Limpiar estado local primero para evitar bucles
       setUser(null);
       setSession(null);
       setProfile(null);
       setPermissions(null);
       setError(null);
       
+      // Ejecutar signOut de Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('❌ Error durante logout:', error);
+        setError(error.message);
+        return { success: false, error: error.message };
+      }
+      
+      console.log('✅ Logout completado exitosamente');
       return { success: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error inesperado durante el cierre de sesión';
+      console.error('❌ Error inesperado en logout:', errorMessage);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
+      console.log('🔄 Proceso de logout finalizado');
     }
   };
 
