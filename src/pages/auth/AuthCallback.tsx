@@ -17,9 +17,7 @@ const AuthCallback: React.FC = () => {
   const [userFullName, setUserFullName] = useState('');
   const [error, setError] = useState('');
   const [isInvitation, setIsInvitation] = useState(false);
-  const [hasProcessedInvitation, setHasProcessedInvitation] = useState(() => {
-    return sessionStorage.getItem('invitationProcessed') === 'true';
-  });
+  const [hasProcessedInvitation, setHasProcessedInvitation] = useState(false);
 
   useEffect(() => {
     const handleAuthCallback = async () => {
@@ -31,8 +29,9 @@ const AuthCallback: React.FC = () => {
       console.log('AuthCallback: hasProcessedInvitation:', hasProcessedInvitation);
       
       // Prevent multiple processing of the same invitation
-      if (hasProcessedInvitation) {
-        console.log('AuthCallback: Already processed invitation, skipping');
+      // Use a more specific check that accounts for the UI state
+      if (hasProcessedInvitation && isSettingPassword) {
+        console.log('AuthCallback: Already processing invitation and showing form, skipping');
         return;
       }
       
@@ -92,10 +91,14 @@ const AuthCallback: React.FC = () => {
                 setUserEmail(email);
                 setUserFullName(fullName);
                 setIsInvitation(true);
-                setIsSettingPassword(true);
                 setHasProcessedInvitation(true);
-                sessionStorage.setItem('invitationProcessed', 'true');
                 setLoading(false);
+                
+                // Wait a brief moment to ensure state is set, then show form
+                setTimeout(() => {
+                  console.log('AuthCallback: Showing password setup form');
+                  setIsSettingPassword(true);
+                }, 100);
                 return;
               }
             } else {
@@ -252,7 +255,7 @@ const AuthCallback: React.FC = () => {
             console.log('Password updated, waiting for profile update...');
             
             // Clean up session storage
-            sessionStorage.removeItem('invitationProcessed');
+            sessionStorage.removeItem('userInfoForProfile');
             
             setTimeout(() => {
               console.log('Redirecting to dashboard...');

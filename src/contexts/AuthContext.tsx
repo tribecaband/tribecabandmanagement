@@ -318,10 +318,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Set minimal fallback data to unblock the UI
         if (!profile) {
+          // Check if we have user info from invitation process
+          let fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuario';
+          let email = user?.email || '';
+          
+          try {
+            const storedUserInfo = sessionStorage.getItem('userInfoForProfile');
+            if (storedUserInfo) {
+              const userInfo = JSON.parse(storedUserInfo);
+              // Use stored info if it's recent (within 5 minutes)
+              if (Date.now() - userInfo.updatedAt < 5 * 60 * 1000) {
+                fullName = userInfo.full_name || fullName;
+                email = userInfo.email || email;
+                console.log('[AuthContext] Using stored user info:', userInfo);
+                // Clean up after use
+                sessionStorage.removeItem('userInfoForProfile');
+              }
+            }
+          } catch (e) {
+            debugError('Error parsing stored user info:', e);
+          }
+          
           setProfile({
             id: userId,
-            email: user?.email || '',
-            full_name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuario',
+            email: email,
+            full_name: fullName,
             role: 'user',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
