@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Supabase Connection</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Debug Supabase Connection</h1>
+    <button onclick="testConnection()">Test Musicians Query</button>
+    <div id="result"></div>
+
+    <script>
+        const { createClient } = supabase;
+        const supabaseClient = createClient(
+            'https://qrusbvjeuthdmvwcgynv.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFydXNidmpldXRoZG12d2NneW52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3Mjc2ODksImV4cCI6MjA3MjMwMzY4OX0.uRuOGe-w6oWARoV9nRAm92GX61PfTEtiXnCQwqzyV6I'
+        );
+
+        async function testConnection() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing connection...';
+            
+            try {
+                console.log('🔍 Testing Supabase connection...');
+                const { data, error } = await supabaseClient
+                    .from('musicians')
+                    .select('*')
+                    .order('name');
+                
+                console.log('🔍 Supabase response:', { data, error });
+                
+                if (error) {
+                    resultDiv.innerHTML = `<p style="color: red;">Error: ${JSON.stringify(error)}</p>`;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: green;">Success! Found ${data.length} musicians:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (err) {
+                console.error('🔍 Exception:', err);
+                resultDiv.innerHTML = `<p style="color: red;">Exception: ${err.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
