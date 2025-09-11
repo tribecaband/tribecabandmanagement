@@ -102,8 +102,8 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
   }
 
   const formatCurrency = (amount: number) => {
-    if (amount === null || amount === undefined) return '0 €'
-    return amount?.toLocaleString('es-ES', {
+    if (amount === null || amount === undefined || amount === 0) return ''
+    return amount.toLocaleString('es-ES', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }) + ' €'
@@ -149,11 +149,11 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
             <div className="text-xs">
               <span className="font-medium text-gray-600">Caché:</span>
               <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.cache_amount)}</span>
-              {(event.advance_amount && Number(event.advance_amount) > 0) && (
+              {(Number(event.advance_amount) > 0) && (
                 <>
                   <span className="text-gray-400 mx-1">|</span>
                   <span className="font-medium text-gray-600">Anticipo:</span>
-                  <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.advance_amount || 0)}</span>
+                  <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.advance_amount)}</span>
                 </>
               )}
             </div>
