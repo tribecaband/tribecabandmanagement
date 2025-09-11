@@ -12,10 +12,18 @@ export interface User {
 export interface Event {
   id: string;
   name: string;
-  date: string;
-  venue: string;
-  description?: string;
-  status: 'draft' | 'confirmed' | 'completed' | 'cancelled';
+  event_date: string;
+  location: string;
+  contact_name: string;
+  contact_phone: string;
+  event_types: string[];
+  band_format: string;
+  cache_amount: number;
+  advance_amount: number;
+  invoice_status: 'yes' | 'advance' | 'no';
+  comments?: string;
+  musicians_count?: number;
+  musicians?: Record<string, string>;
   created_by: string;
   created_at: string;
   updated_at: string;

@@ -1,9 +1,9 @@
 import React from 'react'
 import { Calendar, MapPin, Users, Clock, Euro, Phone, FileText, User, CheckCircle, XCircle } from 'lucide-react'
-import { Event } from '../lib/supabase'
+import { Event as EventType } from '../types'
 
 interface EventCardProps {
-  event: Event
+  event: EventType
   onClick: () => void
   onDelete?: (eventId: string) => void
 }

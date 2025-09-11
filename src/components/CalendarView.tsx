@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { Event } from '../lib/supabase'
+import { Event as EventType } from '../types'
 
 interface CalendarViewProps {
-  events: Event[]
+  events: EventType[]
   selectedDate: Date
   onDateSelect: (date: Date) => void
-  onEventClick: (event: Event) => void
+  onEventClick: (event: EventType) => void
 }
 
 const MONTHS = [

@@ -4,9 +4,10 @@ import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { X, Save, Calendar, Clock, MapPin, FileText, Users, Euro, Trash2, User, DollarSign } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
+import { Event as EventType } from '../types'
 
 interface EventModalProps {
-  event: Event | null
+  event: EventType | null
   onClose: () => void
   onSave: () => void
 }
@@ -183,12 +184,23 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   useEffect(() => {
     console.log('🔍 EventModal useEffect - Loading musicians')
     let isMounted = true
+    let timeoutId: NodeJS.Timeout
     
     const loadMusicians = async () => {
       if (!isMounted) return
       
       console.log('🔍 EventModal loadMusicians - Starting')
       setLoadingMusicians(true)
+      
+      // Safety timeout to prevent infinite loading
+      timeoutId = setTimeout(() => {
+        if (isMounted) {
+          console.warn('⚠️ EventModal loadMusicians - Timeout reached, stopping loading')
+          setLoadingMusicians(false)
+          setMusicians([])
+          toast.error('Tiempo de espera agotado al cargar músicos')
+        }
+      }, 10000) // 10 seconds timeout
       
       try {
         // Load all musicians from Supabase
@@ -202,10 +214,10 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         if (musiciansError) {
           console.error('❌ Error loading musicians:', musiciansError)
           toast.error('Error al cargar los músicos')
-          return
-        }
-        
-        if (isMounted) {
+          if (isMounted) {
+            setMusicians([])
+          }
+        } else if (isMounted) {
           console.log('🔍 EventModal loadMusicians - Setting musicians:', musiciansData?.length || 0)
           setMusicians(musiciansData || [])
         }
@@ -213,11 +225,16 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         console.error('❌ Exception loading musicians:', error)
         if (isMounted) {
           toast.error('Error al cargar los músicos')
+          setMusicians([])
         }
       } finally {
         if (isMounted) {
           console.log('🔍 EventModal loadMusicians - Setting loading to false')
           setLoadingMusicians(false)
+        }
+        // Clear timeout since operation completed
+        if (timeoutId) {
+          clearTimeout(timeoutId)
         }
       }
     }
@@ -227,6 +244,9 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
     return () => {
       console.log('🔍 EventModal useEffect cleanup - Setting isMounted to false')
       isMounted = false
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
     }
   }, []) // Only run once on mount
 

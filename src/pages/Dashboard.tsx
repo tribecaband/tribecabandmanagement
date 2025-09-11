@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { Calendar, Plus, Search, Filter, LogOut, Users as UsersIcon, Settings, Music } from 'lucide-react'
-import { Event } from '../lib/supabase'
+import { Event as EventType } from '../types'
 import EventModal from '../components/EventModal'
 import EventCard from '../components/EventCard'
 import CalendarView from '../components/CalendarView'
@@ -12,11 +12,11 @@ import toast from 'react-hot-toast'
 export default function Dashboard() {
   const { user, profile, signOut } = useAuthStore()
   console.log('🎯 DASHBOARD COMPONENT RENDERED - User:', !!user, 'Profile:', !!profile)
-  const [events, setEvents] = useState<Event[]>([])
-  const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
+  const [events, setEvents] = useState<EventType[]>([])
+  const [filteredEvents, setFilteredEvents] = useState<EventType[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [showEventModal, setShowEventModal] = useState(false)
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const [selectedEvent, setSelectedEvent] = useState<EventType | null>(null)
   const [activeTab, setActiveTab] = useState<'dashboard' | 'users'>('dashboard')
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -114,7 +114,7 @@ export default function Dashboard() {
     console.log('✅ Dashboard: fetchEvents completed')
   }
 
-  const filterEvents = (events: Event[]) => {
+  const filterEvents = (events: EventType[]) => {
     return events.filter(event => {
       const matchesSearch = searchTerm === '' || 
         event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -127,7 +127,7 @@ export default function Dashboard() {
     })
   }
 
-  const handleEventClick = (event: Event) => {
+  const handleEventClick = (event: EventType) => {
     console.log('🎯 Dashboard handleEventClick - Editing event clicked!', event.id)
     console.log('🎯 Dashboard handleEventClick - Event data:', event)
     setSelectedEvent(event)
