@@ -72,7 +72,9 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   const [musicians, setMusicians] = useState<Musician[]>([])
   const [loadingMusicians, setLoadingMusicians] = useState(true)
   
-  console.log('🔍 EventModal - Auth state:', { user: !!user, profile: !!profile, userId: user?.id })
+  console.log('🎯 EventModal COMPONENT RENDERED - Auth state:', { user: !!user, profile: !!profile, userId: user?.id })
+  console.log('🎯 EventModal COMPONENT RENDERED - Loading state:', loading)
+  console.log('🎯 EventModal COMPONENT RENDERED - Event:', event?.id || 'new event')
 
   const { register, handleSubmit, watch, setValue, formState: { errors }, reset } = useForm<FormData>({
     defaultValues: {
@@ -177,136 +179,135 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
 
   // Base amount suggestion removed - will be handled separately if needed
 
-  // Load musicians on component mount and when editing an event
+  // Load musicians on component mount
   useEffect(() => {
-    console.log('🔍 EventModal useEffect - Starting, event:', event?.id)
-    console.log('🔍 EventModal useEffect - Current loadingMusicians state:', loadingMusicians)
-    console.log('🔍 EventModal useEffect - Current musicians state:', musicians.length)
+    console.log('🔍 EventModal useEffect - Loading musicians')
     let isMounted = true
     
-    const loadData = async () => {
-      console.log('🔍 EventModal loadData - Starting, event:', event?.id)
-      console.log('🔍 EventModal loadData - isMounted:', isMounted)
-      console.log('🔍 EventModal loadData - loadingMusicians state:', loadingMusicians)
-      console.log('🔍 EventModal loadData - user:', !!user, 'userId:', user?.id)
+    const loadMusicians = async () => {
+      if (!isMounted) return
       
-      if (!isMounted) {
-        console.log('🔍 EventModal loadData - Component unmounted, returning')
-        return
-      }
-      
-      if (!user) {
-        console.log('❌ EventModal loadData - No authenticated user, skipping')
-        setLoadingMusicians(false)
-        return
-      }
-      
-      console.log('🔍 EventModal loadData - Setting loading to true')
+      console.log('🔍 EventModal loadMusicians - Starting')
       setLoadingMusicians(true)
+      
       try {
-        // Load all musicians first
-        console.log('🔍 EventModal loadData - Loading musicians from Supabase')
-        
-        // Load musicians from Supabase
+        // Load all musicians from Supabase
         const { data: musiciansData, error: musiciansError } = await supabase
           .from('musicians')
           .select('id, name, instrument, is_main')
           .order('name')
         
-        console.log('🔍 EventModal loadData - Musicians data loaded:', { musiciansData, musiciansError })
-        
-        console.log('🔍 EventModal loadData - Processing Supabase response:', { musiciansData, musiciansError })
+        console.log('🔍 EventModal loadMusicians - Response:', { musiciansData, musiciansError })
         
         if (musiciansError) {
           console.error('❌ Error loading musicians:', musiciansError)
-          throw musiciansError
+          toast.error('Error al cargar los músicos')
+          return
         }
         
         if (isMounted) {
-          console.log('🔍 EventModal loadData - Component still mounted, setting musicians:', musiciansData?.length || 0)
-          console.log('🔍 EventModal loadData - Setting musicians state:', musiciansData)
+          console.log('🔍 EventModal loadMusicians - Setting musicians:', musiciansData?.length || 0)
           setMusicians(musiciansData || [])
-        } else {
-          console.log('🔍 EventModal loadData - Component unmounted, skipping musicians state update')
-        }
-        
-        // If editing an event, also load selected musicians
-        if (event && event.id && isMounted) {
-          console.log('🔍 EventModal loadData - Loading event musicians for event:', event.id)
-          try {
-            console.log('🔍 EventModal loadData - Loading event musicians from Supabase')
-            // Load event musicians from Supabase
-            const { data: eventMusiciansData, error: eventMusiciansError } = await supabase
-              .from('event_musicians')
-              .select('musician_id')
-              .eq('event_id', event.id)
-            
-            console.log('🔍 EventModal loadData - Event musicians response:', { eventMusiciansData, eventMusiciansError })
-            
-            if (eventMusiciansError) {
-              console.error('❌ Error loading event musicians:', eventMusiciansError)
-              // Don't throw here, just log and continue
-              console.log('🔍 EventModal loadData - Continuing despite event musicians error')
-            } else {
-              const selectedMusicianIds = eventMusiciansData?.map(em => em.musician_id) || []
-              
-              if (isMounted) {
-                console.log('🔍 EventModal loadData - Setting selected musicians:', selectedMusicianIds)
-                setValue('selected_musicians', selectedMusicianIds)
-                
-                // Update band format based on selected musicians
-                if (selectedMusicianIds.length > 0) {
-                  const automaticFormat = getAutomaticBandFormat(selectedMusicianIds)
-                  console.log('🔍 EventModal loadData - Setting automatic band format:', automaticFormat)
-                  setValue('band_format', automaticFormat)
-                }
-              } else {
-                console.log('🔍 EventModal loadData - Component unmounted, skipping selected musicians state update')
-              }
-            }
-          } catch (eventMusicianError) {
-            console.error('❌ Exception loading event musicians:', eventMusicianError)
-            console.log('🔍 EventModal loadData - Continuing despite event musicians exception')
-          }
         }
       } catch (error) {
-        console.error('❌ Error loading data:', error)
+        console.error('❌ Exception loading musicians:', error)
         if (isMounted) {
-          console.log('🔍 EventModal loadData - Error occurred, showing toast')
-          toast.error('Error al cargar los datos')
-        } else {
-          console.log('🔍 EventModal loadData - Component unmounted, skipping error toast')
+          toast.error('Error al cargar los músicos')
         }
       } finally {
         if (isMounted) {
-          console.log('🔍 EventModal loadData - Setting loading to false')
+          console.log('🔍 EventModal loadMusicians - Setting loading to false')
           setLoadingMusicians(false)
-        } else {
-          console.log('🔍 EventModal loadData - Component unmounted, skipping loading state update')
         }
       }
     }
     
-    loadData()
+    loadMusicians()
     
     return () => {
       console.log('🔍 EventModal useEffect cleanup - Setting isMounted to false')
       isMounted = false
     }
-  }, [event])
+  }, []) // Only run once on mount
+
+  // Load selected musicians when editing an event
+  useEffect(() => {
+    if (!event?.id) return
+    
+    console.log('🔍 EventModal useEffect - Loading selected musicians for event:', event.id)
+    let isMounted = true
+    
+    const loadSelectedMusicians = async () => {
+      if (!isMounted) return
+      
+      try {
+        console.log('🔍 EventModal loadSelectedMusicians - Loading from Supabase')
+        const { data: eventMusiciansData, error: eventMusiciansError } = await supabase
+          .from('event_musicians')
+          .select('musician_id')
+          .eq('event_id', event.id)
+        
+        console.log('🔍 EventModal loadSelectedMusicians - Response:', { eventMusiciansData, eventMusiciansError })
+        
+        if (eventMusiciansError) {
+          console.error('❌ Error loading event musicians:', eventMusiciansError)
+          return
+        }
+        
+        const selectedMusicianIds = eventMusiciansData?.map(em => em.musician_id) || []
+        
+        if (isMounted) {
+          console.log('🔍 EventModal loadSelectedMusicians - Setting selected musicians:', selectedMusicianIds)
+          setValue('selected_musicians', selectedMusicianIds)
+          
+          // Update band format based on selected musicians
+          if (selectedMusicianIds.length > 0) {
+            const automaticFormat = getAutomaticBandFormat(selectedMusicianIds)
+            console.log('🔍 EventModal loadSelectedMusicians - Setting band format:', automaticFormat)
+            setValue('band_format', automaticFormat)
+          }
+        }
+      } catch (error) {
+        console.error('❌ Exception loading selected musicians:', error)
+      }
+    }
+    
+    loadSelectedMusicians()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [event?.id, setValue]) // Run when event ID changes
 
   const onSubmit = async (data: FormData) => {
-    console.log('🔍 EventModal onSubmit - Starting save process')
-    console.log('🔍 EventModal onSubmit - Form data:', data)
+    console.log('🚀 EventModal onSubmit - FUNCTION CALLED! Starting save process')
+    console.log('🚀 EventModal onSubmit - Form data received:', data)
+    console.log('🚀 EventModal onSubmit - Current loading state:', loading)
+    console.log('🔍 EventModal onSubmit - Financial fields specifically:', {
+      cache_amount: {
+        original: data.base_amount,
+        type: typeof data.base_amount,
+        parsed: Number(data.base_amount),
+        watchedValue: watchedBaseAmount
+      },
+      advance_amount: {
+        original: data.advance_amount,
+        type: typeof data.advance_amount,
+        parsed: Number(data.advance_amount),
+        watchedValue: watchedAdvanceAmount
+      }
+    })
+    
+    // Verificar autenticación antes de proceder
+    if (!user || !profile) {
+      console.error('❌ EventModal onSubmit - User not authenticated:', { user: !!user, profile: !!profile })
+      toast.error('Debes estar autenticado para realizar esta acción')
+      return
+    }
+    
+    console.log('✅ EventModal onSubmit - User authenticated:', { userId: user.id, profileId: profile.id })
     
     setLoading(true)
-    
-    // Add timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      console.log('⏰ EventModal: Timeout reached - forcing modal close')
-      setLoading(false)
-      onSave()
-    }, 15000) // 15 seconds timeout
     
     try {
       console.log('🔍 EventModal onSubmit - Creating event date time')
@@ -339,22 +340,85 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
       if (event) {
         console.log('🔍 EventModal onSubmit - Updating existing event:', event.id)
         
-        // Update existing event
-        const { error: updateError } = await supabase
+        console.log('🔄 EventModal: Updating event with data:', {
+          name: data.title,
+          contact_name: data.contact_person,
+          cache_amount: data.base_amount,
+          advance_amount: data.advance_amount,
+          invoice_status: data.status
+        })
+        
+        console.log('🔍 EventModal: Current user info:', {
+          userId: user?.id,
+          userEmail: user?.email,
+          profileId: profile?.id,
+          profileRole: profile?.role,
+          eventCreatedBy: event.created_by
+        })
+
+        // Update existing event with timeout
+        console.log('🔍 EventModal: About to execute update query...')
+        
+        // Try without updated_at first to avoid potential RLS issues
+        const updateData = {
+          name: data.title,
+          contact_name: data.contact_person,
+          event_date: eventDateTime.toISOString(),
+          location: data.venue,
+          contact_phone: data.contact_phone,
+          comments: data.notes,
+          cache_amount: Number(data.base_amount) || 0,
+          advance_amount: Number(data.advance_amount) || 0,
+          invoice_status: data.status
+        }
+        
+        console.log('🔧 EventModal: Update data prepared:', updateData)
+        console.log('🔧 EventModal: Financial fields verification:', {
+          cache_amount: {
+            formValue: data.base_amount,
+            converted: Number(data.base_amount),
+            finalValue: updateData.cache_amount
+          },
+          advance_amount: {
+            formValue: data.advance_amount,
+            converted: Number(data.advance_amount),
+            finalValue: updateData.advance_amount
+          }
+        })
+        
+        const { data: updateResult, error: updateError } = await supabase
           .from('events')
-          .update({
-            name: data.title,
-            contact_name: data.contact_person,
-            event_date: eventDateTime.toISOString(),
-            location: data.venue,
-            contact_phone: data.contact_phone,
-            comments: data.notes,
-            cache_amount: data.base_amount,
-            advance_amount: data.advance_amount || 0,
-            invoice_status: data.status,
-            updated_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('id', event.id)
+          .select()
+        
+        console.log('🔍 EventModal: Update query completed')
+        
+        console.log('🔄 EventModal: Update result:', { 
+          updateError, 
+          updateResult, 
+          rowsAffected: updateResult?.length || 0
+        })
+        
+        // If no rows affected, there might be an RLS issue
+        if (!updateError && updateResult?.length === 0) {
+          console.log('⚠️ EventModal: No rows affected - possible RLS issue')
+          
+          // Try to diagnose by checking if we can read the event
+          const { data: readTest, error: readError } = await supabase
+            .from('events')
+            .select('id, name, created_by')
+            .eq('id', event.id)
+            .single()
+          
+          console.log('🔍 EventModal: Read test result:', { readTest, readError })
+          
+          if (readError || !readTest) {
+            throw new Error('Cannot read event - RLS permissions issue')
+          } else {
+            throw new Error('Event exists but cannot be updated - check RLS update policies')
+          }
+        }
         
         if (updateError) {
           throw new Error(`Error updating event: ${updateError.message}`)
@@ -393,24 +457,51 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
       } else {
         console.log('🔄 EventModal: Creating new event')
         
+        console.log('🔄 EventModal: Creating new event with data:', {
+          name: data.title,
+          contact_name: data.contact_person,
+          cache_amount: data.base_amount,
+          advance_amount: data.advance_amount,
+          invoice_status: data.status
+        })
+
         // Create new event
+        const createData = {
+          name: data.title,
+          contact_name: data.contact_person,
+          event_date: eventDateTime.toISOString(),
+          location: data.venue,
+          contact_phone: data.contact_phone,
+          comments: data.notes,
+          cache_amount: Number(data.base_amount) || 0,
+          advance_amount: Number(data.advance_amount) || 0,
+          invoice_status: data.status,
+          created_by: profile?.id || user?.id || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+        
+        console.log('🔧 EventModal: Create data prepared:', createData)
+        console.log('🔧 EventModal: Financial fields verification for creation:', {
+          cache_amount: {
+            formValue: data.base_amount,
+            converted: Number(data.base_amount),
+            finalValue: createData.cache_amount
+          },
+          advance_amount: {
+            formValue: data.advance_amount,
+            converted: Number(data.advance_amount),
+            finalValue: createData.advance_amount
+          }
+        })
+        
         const { data: newEvent, error: createError } = await supabase
           .from('events')
-          .insert({
-            name: data.title,
-            contact_name: data.contact_person,
-            event_date: eventDateTime.toISOString(),
-            location: data.venue,
-            contact_phone: data.contact_phone,
-            comments: data.notes,
-            cache_amount: data.base_amount,
-            advance_amount: data.advance_amount || 0,
-            invoice_status: data.status,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
+          .insert(createData)
           .select()
           .single()
+        
+        console.log('🔄 EventModal: Create result:', { newEvent: !!newEvent, createError })
         
         if (createError) {
           throw new Error(`Error creating event: ${createError.message}`)
@@ -438,11 +529,9 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
       }
       
       console.log('🔍 EventModal onSubmit - Calling onSave callback')
-      clearTimeout(timeoutId)
       onSave()
       console.log('🔍 EventModal onSubmit - onSave callback completed')
     } catch (error: any) {
-      clearTimeout(timeoutId)
       console.error('❌ EventModal onSubmit - Error saving event:', error)
       
       // Mostrar mensaje de error más específico
@@ -467,7 +556,6 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
       console.log('🔍 EventModal onSubmit - Showing error toast:', errorMessage)
       toast.error(errorMessage)
     } finally {
-      clearTimeout(timeoutId)
       console.log('🔍 EventModal onSubmit - Setting loading to false')
       setLoading(false)
       console.log('🔍 EventModal onSubmit - Process completed')
@@ -548,7 +636,22 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
+        <form 
+          onSubmit={(e) => {
+            console.log('🔥 Form onSubmit triggered - event:', e)
+            console.log('🔥 Form onSubmit - about to call handleSubmit')
+            return handleSubmit(
+              (data) => {
+                console.log('🔥 handleSubmit success callback - data:', data)
+                onSubmit(data)
+              },
+              (errors) => {
+                console.log('🔥 handleSubmit error callback - validation errors:', errors)
+              }
+            )(e)
+          }}
+          className="p-6 space-y-6"
+        >
           {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>

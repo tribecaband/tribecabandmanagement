@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Event Click</title>
+</head>
+<body>
+    <h1>Test para simular clic en evento</h1>
+    <p>Abrir la consola del navegador y ejecutar:</p>
+    <pre>
+// Simular clic en el primer evento
+const firstEventCard = document.querySelector('[data-testid="event-card"]') || document.querySelector('.cursor-pointer');
+if (firstEventCard) {
+    console.log('🖱️ Simulando clic en evento...');
+    firstEventCard.click();
+} else {
+    console.log('❌ No se encontró ningún evento para hacer clic');
+}
+    </pre>
+    
+    <p>O ejecutar directamente en la consola del navegador en localhost:5173:</p>
+    <pre>
+// Buscar eventos en el DOM
+const events = document.querySelectorAll('.cursor-pointer');
+console.log('📋 Eventos encontrados:', events.length);
+if (events.length > 0) {
+    console.log('🖱️ Haciendo clic en el primer evento...');
+    events[0].click();
+}
+    </pre>
+</body>
+</html>

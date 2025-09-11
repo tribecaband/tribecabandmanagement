@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 
 export default function Dashboard() {
   const { user, profile, signOut } = useAuthStore()
+  console.log('🎯 DASHBOARD COMPONENT RENDERED - User:', !!user, 'Profile:', !!profile)
   const [events, setEvents] = useState<Event[]>([])
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
@@ -20,6 +21,8 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
+  
+  console.log('🎯 DASHBOARD STATE - showEventModal:', showEventModal, 'loading:', loading)
 
   useEffect(() => {
     fetchEvents()
@@ -64,16 +67,39 @@ export default function Dashboard() {
 
       if (error) throw error
       
-      // Transform the data to calculate band_format automatically
+      // Transform the data to calculate band_format automatically and format musicians
       const eventsWithBandFormat = eventsData?.map(event => {
         const musiciansCount = event.event_musicians?.length || 0
         const calculatedBandFormat = getBandFormat(musiciansCount)
         
-        return {
+        // Transform event_musicians to musicians format that EventCard expects
+        const musiciansObject: Record<string, string> = {}
+        if (event.event_musicians) {
+          event.event_musicians.forEach((em: any) => {
+            if (em.musicians) {
+              musiciansObject[em.musicians.instrument] = em.musicians.name
+            }
+          })
+        }
+        
+        const transformedEvent = {
           ...event,
           musicians_count: musiciansCount,
-          band_format: calculatedBandFormat // Override with calculated value
+          band_format: calculatedBandFormat,
+          musicians: musiciansObject, // Transform to expected format
+          // Ensure numeric fields are numbers
+          cache_amount: Number(event.cache_amount) || 0,
+          advance_amount: Number(event.advance_amount) || 0
         }
+        
+        console.log('🔄 Dashboard: Transformed event:', {
+          name: transformedEvent.name,
+          cache: transformedEvent.cache_amount,
+          advance: transformedEvent.advance_amount,
+          advance_type: typeof transformedEvent.advance_amount
+        })
+        
+        return transformedEvent
       }) || []
       
       console.log('✅ Dashboard: Setting events state with', eventsWithBandFormat.length, 'events')
@@ -91,9 +117,9 @@ export default function Dashboard() {
   const filterEvents = (events: Event[]) => {
     return events.filter(event => {
       const matchesSearch = searchTerm === '' || 
-        event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.venue.toLowerCase().includes(searchTerm.toLowerCase())
+        event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.contact_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.location.toLowerCase().includes(searchTerm.toLowerCase())
       
       const matchesStatus = statusFilter === 'all' || event.invoice_status === statusFilter
       
@@ -102,13 +128,18 @@ export default function Dashboard() {
   }
 
   const handleEventClick = (event: Event) => {
+    console.log('🎯 Dashboard handleEventClick - Editing event clicked!', event.id)
+    console.log('🎯 Dashboard handleEventClick - Event data:', event)
     setSelectedEvent(event)
     setShowEventModal(true)
+    console.log('🎯 Dashboard handleEventClick - Modal should be open for editing, showEventModal:', true)
   }
 
   const handleNewEvent = () => {
+    console.log('🎯 Dashboard handleNewEvent - Button clicked!')
     setSelectedEvent(null)
     setShowEventModal(true)
+    console.log('🎯 Dashboard handleNewEvent - Modal should be open now, showEventModal:', true)
   }
 
   const handleEventSaved = () => {
@@ -126,6 +157,23 @@ export default function Dashboard() {
   const handleLogout = async () => {
     await signOut()
     toast.success('Sesión cerrada correctamente')
+  }
+
+  const handleDeleteEvent = async (eventId: string) => {
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId)
+
+      if (error) throw error
+
+      toast.success('Evento eliminado correctamente')
+      fetchEvents() // Refresh the events list
+    } catch (error) {
+      console.error('Error deleting event:', error)
+      toast.error('Error al eliminar el evento')
+    }
   }
 
   if (loading) {
@@ -283,6 +331,7 @@ export default function Dashboard() {
                     key={event.id}
                     event={event}
                     onClick={() => handleEventClick(event)}
+                    onDelete={handleDeleteEvent}
                   />
                 ))
               )}
