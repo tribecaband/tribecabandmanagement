@@ -24,11 +24,11 @@ interface FormData {
   band_format: string
   status: string
   base_amount: number
-  iva_percentage?: number
+  base_has_iva?: boolean
   iva_amount?: number
   total_amount?: number
   advance_amount?: number
-  advance_iva_percentage?: number
+  advance_has_iva?: boolean
   advance_iva_amount?: number
   advance_total?: number
   notes?: string
@@ -72,6 +72,15 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [musicians, setMusicians] = useState<Musician[]>([])
   const [loadingMusicians, setLoadingMusicians] = useState(true)
+  const [retryCount, setRetryCount] = useState(0)
+  
+  // Helper to avoid hanging requests (wraps a function that returns a Promise)
+  async function withTimeout<T>(fn: () => Promise<T>, ms: number, label: string): Promise<T> {
+    return await Promise.race<T>([
+      fn(),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms))
+    ])
+  }
   
   console.log('🎯 EventModal COMPONENT RENDERED - Auth state:', { user: !!user, profile: !!profile, userId: user?.id })
   console.log('🎯 EventModal COMPONENT RENDERED - Loading state:', loading)
@@ -89,11 +98,11 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
       band_format: 'trio',
       duration: 3,
       base_amount: 0,
-      iva_percentage: 21,
+      base_has_iva: false,
       iva_amount: 0,
       total_amount: 0,
       advance_amount: 0,
-      advance_iva_percentage: 21,
+      advance_has_iva: false,
       advance_iva_amount: 0,
       advance_total: 0,
       status: 'no',
@@ -103,20 +112,20 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   })
 
   const watchedBaseAmount = watch('base_amount')
-  const watchedIvaPercentage = watch('iva_percentage')
+  const watchedBaseHasIva = watch('base_has_iva')
   const watchedAdvanceAmount = watch('advance_amount')
-  const watchedAdvanceIvaPercentage = watch('advance_iva_percentage')
+  const watchedAdvanceHasIva = watch('advance_has_iva')
   const watchedBandFormat = watch('band_format')
   const watchedSelectedMusicians = watch('selected_musicians')
 
   // Calculated values for display
   const baseAmount = parseFloat(watchedBaseAmount?.toString() || '0')
-  const ivaPercentage = parseFloat(watchedIvaPercentage?.toString() || '21')
-  const ivaAmount = (baseAmount * ivaPercentage) / 100
+  const baseIvaPercentage = watchedBaseHasIva ? 21 : 0
+  const ivaAmount = (baseAmount * baseIvaPercentage) / 100
   const totalAmount = baseAmount + ivaAmount
 
   const advanceAmount = parseFloat(watchedAdvanceAmount?.toString() || '0')
-  const advanceIvaPercentage = parseFloat(watchedAdvanceIvaPercentage?.toString() || '21')
+  const advanceIvaPercentage = watchedAdvanceHasIva ? 21 : 0
   const advanceIvaAmount = (advanceAmount * advanceIvaPercentage) / 100
   const advanceTotalAmount = advanceAmount + advanceIvaAmount
 
@@ -136,11 +145,11 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         band_format: event.band_format || '',
         duration: 3,
         base_amount: event.cache_amount || 0,
-        iva_percentage: 21,
+        base_has_iva: !!event.cache_includes_iva,
         iva_amount: 0,
         total_amount: event.cache_amount || 0,
         advance_amount: event.advance_amount || 0,
-        advance_iva_percentage: 21,
+        advance_has_iva: !!event.advance_includes_iva,
         advance_iva_amount: 0,
         advance_total: 0,
         status: event.invoice_status,
@@ -152,29 +161,25 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
 
   // Auto-calculate IVA and total amount for base amount
   useEffect(() => {
-    const baseAmount = parseFloat(watchedBaseAmount?.toString() || '0')
-    const ivaPercentage = parseFloat(watchedIvaPercentage?.toString() || '21')
-    
-    if (baseAmount >= 0) {
-      const ivaAmount = (baseAmount * ivaPercentage) / 100
-      const totalAmount = baseAmount + ivaAmount
-      
-      setValue('iva_amount', parseFloat(ivaAmount.toFixed(2)))
-      setValue('total_amount', parseFloat(totalAmount.toFixed(2)))
+    const baseAmountVal = parseFloat(watchedBaseAmount?.toString() || '0')
+    const ivaPercent = watchedBaseHasIva ? 21 : 0
+    if (baseAmountVal >= 0) {
+      const ivaAmt = (baseAmountVal * ivaPercent) / 100
+      const totalAmt = baseAmountVal + ivaAmt
+      setValue('iva_amount', parseFloat(ivaAmt.toFixed(2)))
+      setValue('total_amount', parseFloat(totalAmt.toFixed(2)))
     }
-  }, [watchedBaseAmount, watchedIvaPercentage, setValue])
+  }, [watchedBaseAmount, watchedBaseHasIva, setValue])
 
   // Auto-calculate IVA and total amount for advance
   useEffect(() => {
-    const advanceAmount = parseFloat(watchedAdvanceAmount?.toString() || '0')
-    const advanceIvaPercentage = parseFloat(watchedAdvanceIvaPercentage?.toString() || '21')
-    
-    const advanceIvaAmount = (advanceAmount * advanceIvaPercentage) / 100
-    const advanceTotal = advanceAmount + advanceIvaAmount
-    
-    setValue('advance_iva_amount', parseFloat(advanceIvaAmount.toFixed(2)))
-    setValue('advance_total', parseFloat(advanceTotal.toFixed(2)))
-  }, [watchedAdvanceAmount, watchedAdvanceIvaPercentage, setValue])
+    const advanceAmountVal = parseFloat(watchedAdvanceAmount?.toString() || '0')
+    const advIvaPercent = watchedAdvanceHasIva ? 21 : 0
+    const advIvaAmt = (advanceAmountVal * advIvaPercent) / 100
+    const advTotal = advanceAmountVal + advIvaAmt
+    setValue('advance_iva_amount', parseFloat(advIvaAmt.toFixed(2)))
+    setValue('advance_total', parseFloat(advTotal.toFixed(2)))
+  }, [watchedAdvanceAmount, watchedAdvanceHasIva, setValue])
 
   // Band format is calculated automatically, no need for manual updates
 
@@ -198,12 +203,12 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           console.warn('⚠️ EventModal loadMusicians - Timeout reached, stopping loading')
           setLoadingMusicians(false)
           setMusicians([])
-          toast.error('Tiempo de espera agotado al cargar músicos')
+          toast.error('Tiempo de espera agotado al cargar músicos. Verifica tu conexión.')
         }
-      }, 10000) // 10 seconds timeout
+      }, 8000) // Reduced to 8 seconds timeout
       
       try {
-        // Load all musicians from Supabase
+        // Load all musicians from Supabase with better error handling
         const { data: musiciansData, error: musiciansError } = await supabase
           .from('musicians')
           .select('id, name, instrument, is_main')
@@ -213,18 +218,41 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         
         if (musiciansError) {
           console.error('❌ Error loading musicians:', musiciansError)
-          toast.error('Error al cargar los músicos')
+          
+          // Provide specific error messages based on error type
+          let errorMessage = 'Error al cargar los músicos'
+          if (musiciansError.code === 'PGRST116') {
+            errorMessage = 'No tienes permisos para acceder a los músicos. Contacta al administrador.'
+          } else if (musiciansError.message?.includes('permission')) {
+            errorMessage = 'Permisos insuficientes para cargar músicos.'
+          } else if (musiciansError.message?.includes('network')) {
+            errorMessage = 'Error de conexión. Verifica tu internet.'
+          }
+          
+          toast.error(errorMessage)
           if (isMounted) {
             setMusicians([])
           }
         } else if (isMounted) {
           console.log('🔍 EventModal loadMusicians - Setting musicians:', musiciansData?.length || 0)
           setMusicians(musiciansData || [])
+          
+          // Show success message if musicians loaded
+          if (musiciansData && musiciansData.length > 0) {
+            console.log(`✅ Cargados ${musiciansData.length} músicos correctamente`)
+          }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ Exception loading musicians:', error)
         if (isMounted) {
-          toast.error('Error al cargar los músicos')
+          let errorMessage = 'Error inesperado al cargar músicos'
+          if (error?.message?.includes('fetch')) {
+            errorMessage = 'Error de conexión. Verifica tu internet.'
+          } else if (error?.message?.includes('auth')) {
+            errorMessage = 'Error de autenticación. Inicia sesión nuevamente.'
+          }
+          
+          toast.error(errorMessage)
           setMusicians([])
         }
       } finally {
@@ -248,7 +276,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         clearTimeout(timeoutId)
       }
     }
-  }, []) // Only run once on mount
+  }, [retryCount]) // Only run once on mount
 
   // Load selected musicians when editing an event
   useEffect(() => {
@@ -327,6 +355,11 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
     
     console.log('✅ EventModal onSubmit - User authenticated:', { userId: user.id, profileId: profile.id })
     
+    // Prevent double submit if a save is already in progress
+    if (loading) {
+      console.warn('⚠️ EventModal onSubmit - Ignoring submit while another save is in progress')
+      return
+    }
     setLoading(true)
     
     try {
@@ -388,7 +421,9 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           contact_phone: data.contact_phone,
           comments: data.notes,
           cache_amount: Number(data.base_amount) || 0,
+          cache_includes_iva: !!data.base_has_iva,
           advance_amount: Number(data.advance_amount) || 0,
+          advance_includes_iva: !!data.advance_has_iva,
           invoice_status: data.status
         }
         
@@ -406,11 +441,16 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           }
         })
         
-        const { data: updateResult, error: updateError } = await supabase
-          .from('events')
-          .update(updateData)
-          .eq('id', event.id)
-          .select()
+        const updateResp: any = await withTimeout(
+          async () => await supabase
+            .from('events')
+            .update(updateData)
+            .eq('id', event.id)
+            .select(),
+          15000,
+          'Update event'
+        )
+        const { data: updateResult, error: updateError } = updateResp
         
         console.log('🔍 EventModal: Update query completed')
         
@@ -425,11 +465,16 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           console.log('⚠️ EventModal: No rows affected - possible RLS issue')
           
           // Try to diagnose by checking if we can read the event
-          const { data: readTest, error: readError } = await supabase
-            .from('events')
-            .select('id, name, created_by')
-            .eq('id', event.id)
-            .single()
+          const readResp: any = await withTimeout(
+            async () => await supabase
+              .from('events')
+              .select('id, name, created_by')
+              .eq('id', event.id)
+              .single(),
+            10000,
+            'Read event after failed update'
+          )
+          const { data: readTest, error: readError } = readResp
           
           console.log('🔍 EventModal: Read test result:', { readTest, readError })
           
@@ -445,30 +490,37 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         }
         
         // Update event_musicians relationships
-        if (data.selected_musicians && data.selected_musicians.length > 0) {
-          // First, delete existing relationships
-          const { error: deleteError } = await supabase
-            .from('event_musicians')
-            .delete()
-            .eq('event_id', event.id)
-          
+        // Always clear existing relationships, then reinsert if any are selected
+        {
+          const deleteResp: any = await withTimeout(
+            async () => await supabase
+              .from('event_musicians')
+              .delete()
+              .eq('event_id', event.id),
+            10000,
+            'Delete event_musicians (update)'
+          )
+          const { error: deleteError } = deleteResp
           if (deleteError) {
             console.warn('Warning deleting existing musicians:', deleteError.message)
           }
-          
-          // Then, insert new relationships
-          const eventMusicians = data.selected_musicians.map(musicianId => ({
-            event_id: event.id,
-            musician_id: musicianId,
-            role: 'main'
-          }))
-          
-          const { error: insertError } = await supabase
-            .from('event_musicians')
-            .insert(eventMusicians)
-          
-          if (insertError) {
-            console.warn('Warning inserting musicians:', insertError.message)
+          if (data.selected_musicians && data.selected_musicians.length > 0) {
+            const eventMusicians = data.selected_musicians.map(musicianId => ({
+              event_id: event.id,
+              musician_id: musicianId,
+              role: 'main'
+            }))
+            const insertResp: any = await withTimeout(
+              async () => await supabase
+                .from('event_musicians')
+                .insert(eventMusicians),
+              10000,
+              'Insert event_musicians (update)'
+            )
+            const { error: insertError } = insertResp
+            if (insertError) {
+              console.warn('Warning inserting musicians:', insertError.message)
+            }
           }
         }
         
@@ -494,7 +546,9 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           contact_phone: data.contact_phone,
           comments: data.notes,
           cache_amount: Number(data.base_amount) || 0,
+          cache_includes_iva: !!data.base_has_iva,
           advance_amount: Number(data.advance_amount) || 0,
+          advance_includes_iva: !!data.advance_has_iva,
           invoice_status: data.status,
           created_by: profile?.id || user?.id || '',
           created_at: new Date().toISOString(),
@@ -515,11 +569,16 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           }
         })
         
-        const { data: newEvent, error: createError } = await supabase
-          .from('events')
-          .insert(createData)
-          .select()
-          .single()
+        const createResp: any = await withTimeout(
+          async () => await supabase
+            .from('events')
+            .insert(createData)
+            .select()
+            .single(),
+          15000,
+          'Create event'
+        )
+        const { data: newEvent, error: createError } = createResp
         
         console.log('🔄 EventModal: Create result:', { newEvent: !!newEvent, createError })
         
@@ -535,11 +594,18 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             role: 'main'
           }))
           
-          const { error: insertError } = await supabase
-            .from('event_musicians')
-            .insert(eventMusicians)
-          
-          if (insertError) {
+          const insertResp2: any = await withTimeout(
+            async () => {
+              const resp = await supabase
+                .from('event_musicians')
+                .insert(eventMusicians)
+              return resp
+            },
+            10000,
+            'Insert event_musicians (create)'
+          )
+const { error: insertError, data: insertData } = insertResp2
+if (insertError) {
             console.warn('Warning inserting musicians:', insertError.message)
           }
         }
@@ -765,7 +831,16 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             
             {musicians.length === 0 && !loadingMusicians && (
               <div className="text-center py-4">
-                <p className="text-gray-600">No hay músicos disponibles</p>
+                <p className="text-gray-600 mb-3">No hay músicos disponibles</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRetryCount(prev => prev + 1)
+                  }}
+                  className="px-4 py-2 bg-[#2DB2CA] text-white rounded-lg hover:bg-[#25a0b8] transition-colors text-sm"
+                >
+                  Reintentar carga
+                </button>
               </div>
             )}
           </div>
@@ -913,15 +988,16 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    IVA (%)
+                    &nbsp;
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    {...register('iva_percentage')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
-                    placeholder="21.00"
-                  />
+                  <div className="flex items-center mt-1">
+                    <input
+                      type="checkbox"
+                      {...register('base_has_iva')}
+                      className="w-4 h-4 text-[#2DB2CA] border-gray-300 rounded focus:ring-[#2DB2CA]"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Aplicar IVA (21%)</span>
+                  </div>
                 </div>
                 
                 <div>
@@ -974,15 +1050,16 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    IVA Anticipo (%)
+                    &nbsp;
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    {...register('advance_iva_percentage')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
-                    placeholder="21.00"
-                  />
+                  <div className="flex items-center mt-1">
+                    <input
+                      type="checkbox"
+                      {...register('advance_has_iva')}
+                      className="w-4 h-4 text-[#2DB2CA] border-gray-300 rounded focus:ring-[#2DB2CA]"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Aplicar IVA (21%) al anticipo</span>
+                  </div>
                 </div>
                 
                 <div>

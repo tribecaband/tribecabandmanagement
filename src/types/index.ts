@@ -19,7 +19,9 @@ export interface Event {
   event_types: string[];
   band_format: string;
   cache_amount: number;
+  cache_includes_iva?: boolean;
   advance_amount: number;
+  advance_includes_iva?: boolean;
   invoice_status: 'yes' | 'advance' | 'no';
   comments?: string;
   musicians_count?: number;

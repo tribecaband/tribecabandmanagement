@@ -109,6 +109,13 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
     }) + ' €'
   }
 
+  // IVA calculations (21%) for display
+  const IVA_RATE = 0.21
+  const cacheIvaAmount = event.cache_includes_iva ? (Number(event.cache_amount) || 0) * IVA_RATE : 0
+  const cacheTotalWithIva = (Number(event.cache_amount) || 0) + cacheIvaAmount
+  const advanceIvaAmount = event.advance_includes_iva ? (Number(event.advance_amount) || 0) * IVA_RATE : 0
+  const advanceTotalWithIva = (Number(event.advance_amount) || 0) + advanceIvaAmount
+
 
 
   return (
@@ -149,11 +156,17 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
             <div className="text-xs">
               <span className="font-medium text-gray-600">Caché:</span>
               <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.cache_amount)}</span>
+              {event.cache_includes_iva && (
+                <span className="text-gray-500 ml-1">(+{formatCurrency(cacheIvaAmount)} IVA → {formatCurrency(cacheTotalWithIva)})</span>
+              )}
               {(Number(event.advance_amount) > 0) && (
                 <>
                   <span className="text-gray-400 mx-1">|</span>
                   <span className="font-medium text-gray-600">Anticipo:</span>
                   <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.advance_amount)}</span>
+                  {event.advance_includes_iva && (
+                    <span className="text-gray-500 ml-1">(+{formatCurrency(advanceIvaAmount)} IVA → {formatCurrency(advanceTotalWithIva)})</span>
+                  )}
                 </>
               )}
             </div>
