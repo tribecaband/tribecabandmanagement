@@ -86,7 +86,11 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
         >
           <span className="z-10">{day}</span>
           {dayEvents.length > 0 && !isSelected && !isToday && (
-            <div className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 bg-[#2DB2CA] text-white rounded-full flex items-center justify-center text-[10px] font-medium px-0.5">
+            <div className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 text-white rounded-full flex items-center justify-center text-[10px] font-medium px-0.5 ${
+              dayEvents.length === 1 ? 'bg-blue-500' :
+              dayEvents.length === 2 ? 'bg-orange-500' :
+              dayEvents.length >= 3 ? 'bg-red-500' : 'bg-gray-400'
+            }`}>
               {dayEvents.length}
             </div>
           )}
@@ -208,7 +212,20 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
       {/* Compact Legend */}
       <div className="text-[10px] text-gray-500 space-y-1 bg-gray-50 p-2 rounded-md">
         <div className="flex items-center justify-between">
-          <span>Número = eventos del día</span>
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <span>1</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+              <span>2</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <span>3+</span>
+            </div>
+          </div>
           <div className="flex items-center space-x-1">
             <div className="w-2 h-2 bg-[#2DB2CA] rounded-full"></div>
             <span>Hoy/Selec.</span>

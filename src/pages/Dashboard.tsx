@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
-  const [showCalendarPreview, setShowCalendarPreview] = useState(false)
+
 
   useEffect(() => {
     console.log('🏠 Dashboard useEffect running, about to fetch events...')
@@ -253,33 +253,18 @@ export default function Dashboard() {
           {/* Left Panel - Compact Calendar */}
           <div className="w-80 bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
             <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
+              <div className="mb-3">
                 <h2 className="text-base font-semibold text-gray-800 flex items-center">
                   <Calendar className="w-4 h-4 mr-2 text-[#2DB2CA]" />
                   Vista Rápida
                 </h2>
-                <button
-                  onClick={() => setShowCalendarPreview(!showCalendarPreview)}
-                  className="text-xs px-2 py-1 bg-[#2DB2CA] text-white rounded hover:bg-[#25a0b8] transition-colors"
-                >
-                  {showCalendarPreview ? 'Actual' : 'Preview'}
-                </button>
               </div>
-              {showCalendarPreview ? (
-                <CalendarPreview 
-                  events={events}
-                  selectedDate={selectedDate}
-                  onDateSelect={handleDateSelect}
-                  onEventClick={handleEventClick}
-                />
-              ) : (
-                <CompactCalendar 
-                  events={events}
-                  selectedDate={selectedDate}
-                  onDateSelect={handleDateSelect}
-                  onEventClick={handleEventClick}
-                />
-              )}
+              <CompactCalendar 
+                events={events}
+                selectedDate={selectedDate}
+                onDateSelect={handleDateSelect}
+                onEventClick={handleEventClick}
+              />
             </div>
 
             {/* Quick Stats */}
