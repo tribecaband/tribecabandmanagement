@@ -1,5 +1,44 @@
 // Tipos principales para TriBeCa
 
+// Tipos para ubicación geográfica
+export interface LocationCoordinates {
+  lat: number;
+  lng: number;
+}
+
+export interface LocationAddressComponents {
+  street_number?: string;
+  route?: string;
+  locality?: string;
+  administrative_area_level_2?: string;
+  administrative_area_level_1?: string;
+  country?: string;
+  postal_code?: string;
+}
+
+export interface LocationData {
+  // Datos básicos para mostrar
+  formatted_address: string;
+
+  // Coordenadas para mapas y funcionalidad avanzada
+  coordinates: LocationCoordinates;
+
+  // Componentes de dirección para búsquedas y filtros
+  address_components: LocationAddressComponents;
+
+  // Metadatos de Google Places
+  place_id: string;
+  place_types: string[];
+
+  // Información adicional
+  name?: string;
+  vicinity?: string;
+
+  // Metadatos del sistema
+  created_at: string;
+  source: 'google_places' | 'manual';
+}
+
 export interface User {
   id: string;
   email: string;
@@ -13,9 +52,9 @@ export interface Event {
   id: string;
   name: string;
   event_date: string;
-  location: string;
   contact_name: string;
   contact_phone: string;
+  location?: LocationData | string; // Soporte para migración gradual
   event_types: string[];
   band_format: string;
   cache_amount: number;
@@ -68,7 +107,6 @@ export interface BandFormat {
 export interface CreateEventForm {
   name: string;
   date: string;
-  venue: string;
   description?: string;
 }
 

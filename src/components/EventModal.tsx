@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { X, Save, Calendar, Clock, MapPin, FileText, Users, Euro, Trash2, User, DollarSign } from 'lucide-react'
+import { X, Save, Calendar, Clock, FileText, Users, Euro, Trash2, User } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { Event as EventType } from '../types'
+import { Event as EventType, LocationData } from '../types'
+import LocationAutocomplete from './LocationAutocomplete'
 
 interface EventModalProps {
   event: EventType | null
@@ -16,11 +17,10 @@ interface FormData {
   title: string
   contact_person: string
   contact_phone: string
+  location: string
   date: string
   time: string
   duration?: number
-  venue: string
-  address?: string
   band_format: string
   status: string
   base_amount: number
@@ -73,6 +73,9 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   const [musicians, setMusicians] = useState<Musician[]>([])
   const [loadingMusicians, setLoadingMusicians] = useState(true)
   const [retryCount, setRetryCount] = useState(0)
+  const [musiciansError, setMusiciansError] = useState<string | null>(null)
+  const [autoRetryAttempts, setAutoRetryAttempts] = useState(0)
+  const [locationData, setLocationData] = useState<LocationData | null>(null)
   
   // Helper to avoid hanging requests (wraps a function that returns a Promise)
   async function withTimeout<T>(fn: () => Promise<T>, ms: number, label: string): Promise<T> {
@@ -82,19 +85,15 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
     ])
   }
   
-  console.log('🎯 EventModal COMPONENT RENDERED - Auth state:', { user: !!user, profile: !!profile, userId: user?.id })
-  console.log('🎯 EventModal COMPONENT RENDERED - Loading state:', loading)
-  console.log('🎯 EventModal COMPONENT RENDERED - Event:', event?.id || 'new event')
 
   const { register, handleSubmit, watch, setValue, formState: { errors }, reset } = useForm<FormData>({
     defaultValues: {
       title: '',
       contact_person: '',
       contact_phone: '',
+      location: '',
       date: '',
       time: '',
-      venue: '',
-      address: '',
       band_format: 'trio',
       duration: 3,
       base_amount: 0,
@@ -115,33 +114,76 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   const watchedBaseHasIva = watch('base_has_iva')
   const watchedAdvanceAmount = watch('advance_amount')
   const watchedAdvanceHasIva = watch('advance_has_iva')
-  const watchedBandFormat = watch('band_format')
   const watchedSelectedMusicians = watch('selected_musicians')
+  const watchedLocation = watch('location')
 
-  // Calculated values for display
-  const baseAmount = parseFloat(watchedBaseAmount?.toString() || '0')
-  const baseIvaPercentage = watchedBaseHasIva ? 21 : 0
-  const ivaAmount = (baseAmount * baseIvaPercentage) / 100
-  const totalAmount = baseAmount + ivaAmount
+  // Memoized calculated values for display
+  const calculatedAmounts = useMemo(() => {
+    const baseAmount = parseFloat(watchedBaseAmount?.toString() || '0')
+    const baseIvaPercentage = watchedBaseHasIva ? 21 : 0
+    const ivaAmount = (baseAmount * baseIvaPercentage) / 100
+    const totalAmount = baseAmount + ivaAmount
 
-  const advanceAmount = parseFloat(watchedAdvanceAmount?.toString() || '0')
-  const advanceIvaPercentage = watchedAdvanceHasIva ? 21 : 0
-  const advanceIvaAmount = (advanceAmount * advanceIvaPercentage) / 100
-  const advanceTotalAmount = advanceAmount + advanceIvaAmount
+    const advanceAmount = parseFloat(watchedAdvanceAmount?.toString() || '0')
+    const advanceIvaPercentage = watchedAdvanceHasIva ? 21 : 0
+    const advanceIvaAmount = (advanceAmount * advanceIvaPercentage) / 100
+    const advanceTotalAmount = advanceAmount + advanceIvaAmount
+
+    return {
+      baseAmount,
+      ivaAmount,
+      totalAmount,
+      advanceAmount,
+      advanceIvaAmount,
+      advanceTotalAmount
+    }
+  }, [watchedBaseAmount, watchedBaseHasIva, watchedAdvanceAmount, watchedAdvanceHasIva])
+
+  const { baseAmount, ivaAmount, totalAmount, advanceAmount, advanceIvaAmount, advanceTotalAmount } = calculatedAmounts
 
   // Band format calculation is now handled automatically in Dashboard
 
   useEffect(() => {
     if (event) {
       const eventDate = new Date(event.event_date)
+
+      // Determinar el valor de location para el formulario
+      let locationValue = ''
+      let locationDataValue: LocationData | null = null
+
+      if (event.location) {
+        if (typeof event.location === 'string') {
+          // Formato antiguo: solo texto
+          locationValue = event.location
+        } else {
+          // Formato nuevo: objeto LocationData
+          locationDataValue = event.location
+          
+          // Determinar si es un lugar (place) o solo una dirección
+          const isPlace = event.location.place_types && 
+            event.location.place_types.some(type => 
+              ['restaurant', 'bar', 'cafe', 'hotel', 'store', 'establishment', 'point_of_interest'].includes(type)
+            )
+          
+          // Si es un lugar y tiene nombre, mostrar el nombre
+          if (isPlace && event.location.name && event.location.name !== event.location.formatted_address) {
+            locationValue = event.location.name
+          } else {
+            // Si no es un lugar o no tiene nombre, mostrar la dirección completa
+            locationValue = event.location.formatted_address
+          }
+        }
+      }
+
+      setLocationData(locationDataValue)
+
       reset({
         title: event.name,
         contact_person: event.contact_name,
         contact_phone: event.contact_phone || '',
+        location: locationValue,
         date: eventDate.toISOString().split('T')[0],
         time: eventDate.toTimeString().slice(0, 5),
-        venue: event.location,
-        address: event.location || '',
         band_format: event.band_format || '',
         duration: 3,
         base_amount: event.cache_amount || 0,
@@ -156,6 +198,9 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         notes: event.comments || '',
         selected_musicians: []
       })
+    } else {
+      // Limpiar datos cuando no hay evento
+      setLocationData(null)
     }
   }, [event, reset])
 
@@ -185,240 +230,250 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
 
   // Base amount suggestion removed - will be handled separately if needed
 
-  // Load musicians on component mount
-  useEffect(() => {
-    console.log('🔍 EventModal useEffect - Loading musicians')
-    let isMounted = true
-    let timeoutId: NodeJS.Timeout
+  // Memoized function to load musicians
+  const loadMusicians = useCallback(async () => {
+    console.log('🎵 loadMusicians called - Auth state:', { 
+      user: !!user, 
+      profile: !!profile,
+      userId: user?.id,
+      profileId: profile?.id 
+    })
     
-    const loadMusicians = async () => {
-      if (!isMounted) return
-      
-      console.log('🔍 EventModal loadMusicians - Starting')
-      setLoadingMusicians(true)
-      
-      // Safety timeout to prevent infinite loading
-      timeoutId = setTimeout(() => {
-        if (isMounted) {
-          console.warn('⚠️ EventModal loadMusicians - Timeout reached, stopping loading')
-          setLoadingMusicians(false)
-          setMusicians([])
-          toast.error('Tiempo de espera agotado al cargar músicos. Verifica tu conexión.')
-        }
-      }, 8000) // Reduced to 8 seconds timeout
-      
-      try {
-        // Load all musicians from Supabase with better error handling
-        const { data: musiciansData, error: musiciansError } = await supabase
-          .from('musicians')
-          .select('id, name, instrument, is_main')
-          .order('name')
-        
-        console.log('🔍 EventModal loadMusicians - Response:', { musiciansData, musiciansError })
-        
-        if (musiciansError) {
-          console.error('❌ Error loading musicians:', musiciansError)
-          
-          // Provide specific error messages based on error type
-          let errorMessage = 'Error al cargar los músicos'
-          if (musiciansError.code === 'PGRST116') {
-            errorMessage = 'No tienes permisos para acceder a los músicos. Contacta al administrador.'
-          } else if (musiciansError.message?.includes('permission')) {
-            errorMessage = 'Permisos insuficientes para cargar músicos.'
-          } else if (musiciansError.message?.includes('network')) {
-            errorMessage = 'Error de conexión. Verifica tu internet.'
-          }
-          
-          toast.error(errorMessage)
-          if (isMounted) {
-            setMusicians([])
-          }
-        } else if (isMounted) {
-          console.log('🔍 EventModal loadMusicians - Setting musicians:', musiciansData?.length || 0)
-          setMusicians(musiciansData || [])
-          
-          // Show success message if musicians loaded
-          if (musiciansData && musiciansData.length > 0) {
-            console.log(`✅ Cargados ${musiciansData.length} músicos correctamente`)
-          }
-        }
-      } catch (error: any) {
-        console.error('❌ Exception loading musicians:', error)
-        if (isMounted) {
-          let errorMessage = 'Error inesperado al cargar músicos'
-          if (error?.message?.includes('fetch')) {
-            errorMessage = 'Error de conexión. Verifica tu internet.'
-          } else if (error?.message?.includes('auth')) {
-            errorMessage = 'Error de autenticación. Inicia sesión nuevamente.'
-          }
-          
-          toast.error(errorMessage)
-          setMusicians([])
-        }
-      } finally {
-        if (isMounted) {
-          console.log('🔍 EventModal loadMusicians - Setting loading to false')
-          setLoadingMusicians(false)
-        }
-        // Clear timeout since operation completed
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-        }
-      }
+    // Only try to load if user is authenticated
+    if (!user || !profile) {
+      console.log('🚫 No user or profile, aborting musicians load')
+      setLoadingMusicians(false)
+      setMusicians([])
+      return
     }
-    
-    loadMusicians()
-    
-    return () => {
-      console.log('🔍 EventModal useEffect cleanup - Setting isMounted to false')
-      isMounted = false
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-    }
-  }, [retryCount]) // Only run once on mount
 
-  // Load selected musicians when editing an event
-  useEffect(() => {
-    if (!event?.id) return
+    console.log('🔄 Starting musicians load...')
+    setLoadingMusicians(true)
+    setMusiciansError(null)
     
-    console.log('🔍 EventModal useEffect - Loading selected musicians for event:', event.id)
-    let isMounted = true
-    
-    const loadSelectedMusicians = async () => {
-      if (!isMounted) return
+    try {
+      // Verify session is still valid before making the request
+      console.log('🔍 Checking session validity...')
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
-      try {
-        console.log('🔍 EventModal loadSelectedMusicians - Loading from Supabase')
-        const { data: eventMusiciansData, error: eventMusiciansError } = await supabase
-          .from('event_musicians')
-          .select('musician_id')
-          .eq('event_id', event.id)
+      const sessionExpiresAt = session?.expires_at ? new Date(session.expires_at * 1000) : null
+      const now = new Date()
+      const isExpired = sessionExpiresAt ? sessionExpiresAt < now : false
+      const expiresInMinutes = sessionExpiresAt ? Math.floor((sessionExpiresAt.getTime() - now.getTime()) / (1000 * 60)) : null
+      
+      console.log('📋 Session check result:', { 
+        hasSession: !!session, 
+        sessionError,
+        expiresAt: sessionExpiresAt?.toISOString(),
+        isExpired,
+        expiresInMinutes
+      })
+      
+      // If session expires in less than 5 minutes, proactively refresh it
+      if (session && expiresInMinutes !== null && expiresInMinutes < 5) {
+        console.log('⏰ Session expires soon, proactively refreshing...')
+        const refreshSuccess = false
+        console.log('📋 Proactive refresh result:', refreshSuccess)
+      }
+      
+      if (!session) {
+        console.error('❌ No active session when loading musicians')
+        console.log('🔄 Attempting to refresh session before giving up...')
         
-        console.log('🔍 EventModal loadSelectedMusicians - Response:', { eventMusiciansData, eventMusiciansError })
+        // Try to refresh session before giving up
+        const refreshSuccess = false
+        console.log('📋 Emergency refresh result:', refreshSuccess)
         
-        if (eventMusiciansError) {
-          console.error('❌ Error loading event musicians:', eventMusiciansError)
+        if (refreshSuccess) {
+          console.log('✅ Session refreshed successfully, retrying musicians load...')
+          setTimeout(() => loadMusicians(), 500)
           return
         }
         
-        const selectedMusicianIds = eventMusiciansData?.map(em => em.musician_id) || []
+        // If refresh failed, user needs to sign in again
+        toast.error('Sesión expirada. Por favor, inicia sesión nuevamente.')
+        setMusicians([])
+        setMusiciansError('No hay sesión activa')
+        return
+      }
+      
+      console.log('✅ Session is valid, making musicians query...')
+
+      const { data: musiciansData, error: musiciansError } = await supabase
+        .from('musicians')
+        .select('id, name, instrument, is_main')
+        .order('name')
+      
+      console.log('📊 Musicians query result:', { 
+        dataCount: musiciansData?.length || 0, 
+        hasError: !!musiciansError,
+        errorCode: musiciansError?.code,
+        errorMessage: musiciansError?.message 
+      })
+      
+      if (musiciansError) {
+        console.error('❌ Error loading musicians:', musiciansError)
+        let errorMessage = 'Error al cargar los músicos'
         
-        if (isMounted) {
-          console.log('🔍 EventModal loadSelectedMusicians - Setting selected musicians:', selectedMusicianIds)
-          setValue('selected_musicians', selectedMusicianIds)
+        // Handle specific error types
+        if (musiciansError.code === '42501' || musiciansError.message?.includes('permission denied')) {
+          errorMessage = 'Sin permisos para acceder a los músicos. Intentando renovar sesión...'
+          console.log('🔄 Attempting session refresh due to permission error...')
           
-          // Update band format based on selected musicians
-          if (selectedMusicianIds.length > 0) {
-            const automaticFormat = getAutomaticBandFormat(selectedMusicianIds)
-            console.log('🔍 EventModal loadSelectedMusicians - Setting band format:', automaticFormat)
-            setValue('band_format', automaticFormat)
+          // Try to refresh the session using the auth store and auto-retry once
+          const refreshSuccess = false
+          console.log('📋 Session refresh result:', refreshSuccess)
+          
+          if (refreshSuccess && autoRetryAttempts < 1) {
+            console.log('✅ Session refreshed, retrying musicians load...')
+            setAutoRetryAttempts(prev => prev + 1)
+            setTimeout(() => {
+              loadMusicians()
+            }, 1000)
+            return
+          } else {
+            console.log('❌ Session refresh failed or max retries reached:', { refreshSuccess, autoRetryAttempts })
+            errorMessage = 'No se pudo renovar la sesión. Inicia sesión nuevamente.'
           }
+        } else if (musiciansError.code === 'PGRST116') {
+          errorMessage = 'No tienes permisos para acceder a los músicos. Contacta al administrador.'
+        } else if (musiciansError.message?.includes('network')) {
+          errorMessage = 'Error de conexión. Verifica tu internet.'
+        } else {
+          errorMessage = `Error: ${musiciansError.message || 'Error desconocido'}`
         }
-      } catch (error) {
-        console.error('❌ Exception loading selected musicians:', error)
+        
+        toast.error(errorMessage)
+        setMusicians([])
+        setMusiciansError(errorMessage)
+      } else {
+        console.log('✅ Musicians loaded successfully:', musiciansData?.length || 0, 'musicians')
+        setMusicians(musiciansData || [])
+        setAutoRetryAttempts(0) // Reset retry counter on successful load
+        if (musiciansData?.length === 0) {
+          console.log('⚠️ No musicians found in database')
+          toast.warning('No hay músicos registrados en el sistema.')
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ Exception loading musicians:', error)
+      let errorMessage = 'Error inesperado al cargar músicos'
+      
+      if (error?.message?.includes('fetch') || error?.name === 'NetworkError') {
+        errorMessage = 'Error de conexión. Verifica tu internet e inténtalo de nuevo.'
+      } else if (error?.message?.includes('auth') || error?.status === 401) {
+        errorMessage = 'Error de autenticación. Inicia sesión nuevamente.'
+      }
+      
+      toast.error(errorMessage)
+      setMusicians([])
+      setMusiciansError(errorMessage)
+    } finally {
+      setLoadingMusicians(false)
+    }
+  }, [user, profile])
+
+  // Load musicians on component mount and when authentication changes
+  useEffect(() => {
+    // Add a small delay to ensure auth state is settled
+    const timeoutId = setTimeout(() => {
+      loadMusicians()
+    }, 100)
+    
+    return () => clearTimeout(timeoutId)
+  }, [loadMusicians, retryCount])
+
+  // Memoized function to load selected musicians
+  const loadSelectedMusicians = useCallback(async (eventId: string) => {
+    // Only try to load if user is authenticated
+    if (!user || !profile) {
+      return
+    }
+
+    try {
+      // Verify session is still valid
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        console.error('No active session when loading selected musicians')
+        return
+      }
+
+      const { data: eventMusiciansData, error: eventMusiciansError } = await supabase
+        .from('event_musicians')
+        .select('musician_id')
+        .eq('event_id', eventId)
+      
+      if (eventMusiciansError) {
+        console.error('❌ Error loading event musicians:', eventMusiciansError)
+        
+        if (eventMusiciansError.code === '42501' || eventMusiciansError.message?.includes('permission denied')) {
+          toast.error('Sin permisos para cargar los músicos del evento. Verifica tu sesión.')
+          // Try to refresh the session
+          // Session check removed
+        }
+        return
+      }
+      
+      const selectedMusicianIds = eventMusiciansData?.map(em => em.musician_id) || []
+      setValue('selected_musicians', selectedMusicianIds)
+      
+      // Update band format based on selected musicians
+      if (selectedMusicianIds.length > 0) {
+        const automaticFormat = getAutomaticBandFormat(selectedMusicianIds)
+        setValue('band_format', automaticFormat)
+      }
+    } catch (error) {
+      console.error('❌ Exception loading selected musicians:', error)
+      if (error && typeof error === 'object' && 'status' in error && error.status === 401) {
+        toast.error('Sesión expirada. Por favor, inicia sesión nuevamente.')
       }
     }
-    
-    loadSelectedMusicians()
-    
-    return () => {
-      isMounted = false
+  }, [setValue, user, profile])
+
+  // Load selected musicians when editing an event
+  useEffect(() => {
+    if (event?.id && user && profile) {
+      // Add a small delay to ensure musicians are loaded first
+      const timeoutId = setTimeout(() => {
+        loadSelectedMusicians(event.id)
+      }, 200)
+      
+      return () => clearTimeout(timeoutId)
     }
-  }, [event?.id, setValue]) // Run when event ID changes
+  }, [event?.id, loadSelectedMusicians, user, profile])
 
   const onSubmit = async (data: FormData) => {
-    console.log('🚀 EventModal onSubmit - FUNCTION CALLED! Starting save process')
-    console.log('🚀 EventModal onSubmit - Form data received:', data)
-    console.log('🚀 EventModal onSubmit - Current loading state:', loading)
-    console.log('🔍 EventModal onSubmit - Financial fields specifically:', {
-      cache_amount: {
-        original: data.base_amount,
-        type: typeof data.base_amount,
-        parsed: Number(data.base_amount),
-        watchedValue: watchedBaseAmount
-      },
-      advance_amount: {
-        original: data.advance_amount,
-        type: typeof data.advance_amount,
-        parsed: Number(data.advance_amount),
-        watchedValue: watchedAdvanceAmount
-      }
-    })
-    
     // Verificar autenticación antes de proceder
     if (!user || !profile) {
-      console.error('❌ EventModal onSubmit - User not authenticated:', { user: !!user, profile: !!profile })
       toast.error('Debes estar autenticado para realizar esta acción')
       return
     }
     
-    console.log('✅ EventModal onSubmit - User authenticated:', { userId: user.id, profileId: profile.id })
-    
     // Prevent double submit if a save is already in progress
     if (loading) {
-      console.warn('⚠️ EventModal onSubmit - Ignoring submit while another save is in progress')
       return
     }
     setLoading(true)
     
+    let saveSucceeded = false
     try {
-      console.log('🔍 EventModal onSubmit - Creating event date time')
       const eventDateTime = new Date(`${data.date}T${data.time}`)
-      console.log('🔍 EventModal onSubmit - Event date time:', eventDateTime.toISOString())
-      
-      // Band format is calculated automatically in Dashboard based on event_musicians count
-      
-      console.log('🔍 EventModal onSubmit - Preparing event data')
-      const eventData = {
-        name: data.title,
-        contact_name: data.contact_person,
-        event_date: eventDateTime.toISOString(),
-        location: data.venue,
-        contact_phone: data.contact_phone,
-        comments: data.notes,
-        cache_amount: data.base_amount,
-        cache_includes_iva: false,
-        advance_amount: data.advance_amount || 0,
-        advance_includes_iva: false,
-        invoice_status: data.status,
-        is_active: true,
-        event_types: [],
-        musicians: {},
-        band_format: 'auto', // Will be calculated automatically
-        created_by: profile?.id || ''
-      }
-      console.log('🔍 EventModal onSubmit - Event data prepared:', eventData)
-
       if (event) {
-        console.log('🔍 EventModal onSubmit - Updating existing event:', event.id)
-        
-        console.log('🔄 EventModal: Updating event with data:', {
-          name: data.title,
-          contact_name: data.contact_person,
-          cache_amount: data.base_amount,
-          advance_amount: data.advance_amount,
-          invoice_status: data.status
-        })
-        
-        console.log('🔍 EventModal: Current user info:', {
-          userId: user?.id,
-          userEmail: user?.email,
-          profileId: profile?.id,
-          profileRole: profile?.role,
-          eventCreatedBy: event.created_by
-        })
-
-        // Update existing event with timeout
-        console.log('🔍 EventModal: About to execute update query...')
-        
-        // Try without updated_at first to avoid potential RLS issues
         const updateData = {
           name: data.title,
           contact_name: data.contact_person,
           event_date: eventDateTime.toISOString(),
-          location: data.venue,
           contact_phone: data.contact_phone,
+          location: locationData || {
+            formatted_address: data.location,
+            coordinates: { lat: 0, lng: 0 },
+            address_components: {},
+            place_id: '',
+            place_types: [],
+            created_at: new Date().toISOString(),
+            source: 'manual' as const
+          }, // Usar datos completos o crear un objeto manual
           comments: data.notes,
           cache_amount: Number(data.base_amount) || 0,
           cache_includes_iva: !!data.base_has_iva,
@@ -426,21 +481,6 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           advance_includes_iva: !!data.advance_has_iva,
           invoice_status: data.status
         }
-        
-        console.log('🔧 EventModal: Update data prepared:', updateData)
-        console.log('🔧 EventModal: Financial fields verification:', {
-          cache_amount: {
-            formValue: data.base_amount,
-            converted: Number(data.base_amount),
-            finalValue: updateData.cache_amount
-          },
-          advance_amount: {
-            formValue: data.advance_amount,
-            converted: Number(data.advance_amount),
-            finalValue: updateData.advance_amount
-          }
-        })
-        
         const updateResp: any = await withTimeout(
           async () => await supabase
             .from('events')
@@ -452,18 +492,8 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         )
         const { data: updateResult, error: updateError } = updateResp
         
-        console.log('🔍 EventModal: Update query completed')
-        
-        console.log('🔄 EventModal: Update result:', { 
-          updateError, 
-          updateResult, 
-          rowsAffected: updateResult?.length || 0
-        })
-        
         // If no rows affected, there might be an RLS issue
         if (!updateError && updateResult?.length === 0) {
-          console.log('⚠️ EventModal: No rows affected - possible RLS issue')
-          
           // Try to diagnose by checking if we can read the event
           const readResp: any = await withTimeout(
             async () => await supabase
@@ -475,8 +505,6 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             'Read event after failed update'
           )
           const { data: readTest, error: readError } = readResp
-          
-          console.log('🔍 EventModal: Read test result:', { readTest, readError })
           
           if (readError || !readTest) {
             throw new Error('Cannot read event - RLS permissions issue')
@@ -524,26 +552,23 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           }
         }
         
-        console.log('✅ EventModal: Event update completed')
         toast.success('Evento actualizado correctamente')
       } else {
-        console.log('🔄 EventModal: Creating new event')
-        
-        console.log('🔄 EventModal: Creating new event with data:', {
-          name: data.title,
-          contact_name: data.contact_person,
-          cache_amount: data.base_amount,
-          advance_amount: data.advance_amount,
-          invoice_status: data.status
-        })
-
         // Create new event
         const createData = {
           name: data.title,
           contact_name: data.contact_person,
           event_date: eventDateTime.toISOString(),
-          location: data.venue,
           contact_phone: data.contact_phone,
+          location: locationData || {
+            formatted_address: data.location,
+            coordinates: { lat: 0, lng: 0 },
+            address_components: {},
+            place_id: '',
+            place_types: [],
+            created_at: new Date().toISOString(),
+            source: 'manual' as const
+          }, // Usar datos completos o crear un objeto manual
           comments: data.notes,
           cache_amount: Number(data.base_amount) || 0,
           cache_includes_iva: !!data.base_has_iva,
@@ -555,20 +580,6 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           updated_at: new Date().toISOString()
         }
         
-        console.log('🔧 EventModal: Create data prepared:', createData)
-        console.log('🔧 EventModal: Financial fields verification for creation:', {
-          cache_amount: {
-            formValue: data.base_amount,
-            converted: Number(data.base_amount),
-            finalValue: createData.cache_amount
-          },
-          advance_amount: {
-            formValue: data.advance_amount,
-            converted: Number(data.advance_amount),
-            finalValue: createData.advance_amount
-          }
-        })
-        
         const createResp: any = await withTimeout(
           async () => await supabase
             .from('events')
@@ -579,8 +590,6 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           'Create event'
         )
         const { data: newEvent, error: createError } = createResp
-        
-        console.log('🔄 EventModal: Create result:', { newEvent: !!newEvent, createError })
         
         if (createError) {
           throw new Error(`Error creating event: ${createError.message}`)
@@ -604,47 +613,57 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             10000,
             'Insert event_musicians (create)'
           )
-const { error: insertError, data: insertData } = insertResp2
-if (insertError) {
+          const { error: insertError, data: insertData } = insertResp2
+          if (insertError) {
             console.warn('Warning inserting musicians:', insertError.message)
           }
         }
         
-        console.log('✅ EventModal: Event creation completed')
         toast.success('Evento creado correctamente')
       }
-      
-      console.log('🔍 EventModal onSubmit - Calling onSave callback')
-      onSave()
-      console.log('🔍 EventModal onSubmit - onSave callback completed')
+      // Mark DB save as successful before calling UI callbacks
+      saveSucceeded = true
+      try {
+        onSave()
+      } catch (cbErr) {
+        console.warn('Event saved, but onSave callback failed:', cbErr)
+        toast.warning('Evento guardado, pero hubo un problema actualizando la vista. Intenta recargar.')
+      }
     } catch (error: any) {
-      console.error('❌ EventModal onSubmit - Error saving event:', error)
-      
       // Mostrar mensaje de error más específico
       let errorMessage = 'Error al guardar el evento'
-      
-      if (error?.message) {
-        if (error.message.includes('contact_phone')) {
+
+      const rawMessage = (error?.message || error?.msg || error?.error_description || error?.code || '').toString()
+      if (rawMessage) {
+        if (rawMessage.includes('contact_phone')) {
           errorMessage = 'El teléfono de contacto es requerido'
-        } else if (error.message.includes('duplicate key')) {
+        } else if (rawMessage.includes('duplicate key')) {
           errorMessage = 'Ya existe un evento con estos datos'
-        } else if (error.message.includes('foreign key')) {
+        } else if (rawMessage.includes('foreign key')) {
           errorMessage = 'Error de referencia en los datos'
-        } else if (error.message.includes('not-null')) {
+        } else if (rawMessage.includes('not-null')) {
           errorMessage = 'Faltan campos requeridos'
-        } else if (error.message.includes('events_invoice_status_check')) {
+        } else if (rawMessage.includes('events_invoice_status_check')) {
           errorMessage = 'Estado de facturación inválido. Selecciona una opción válida.'
+        } else if (rawMessage.toLowerCase().includes('timeout')) {
+          errorMessage = 'Tiempo de espera agotado guardando. Verifica conexión y vuelve a intentar.'
         } else {
-          errorMessage = `Error: ${error.message}`
+          errorMessage = `Error: ${rawMessage}`
         }
+      } else {
+        // Fallback si el error no tiene mensaje
+        errorMessage = 'Error desconocido al guardar. Revisa permisos (RLS) o la conexión e inténtalo de nuevo.'
       }
-      
-      console.log('🔍 EventModal onSubmit - Showing error toast:', errorMessage)
-      toast.error(errorMessage)
+
+      if (saveSucceeded) {
+        // Do not report as save failure if DB save already succeeded
+        const infoMsg = 'Evento guardado, pero hubo un problema posterior. La vista podría no haberse actualizado.'
+        toast.warning(infoMsg)
+      } else {
+        toast.error(errorMessage)
+      }
     } finally {
-      console.log('🔍 EventModal onSubmit - Setting loading to false')
       setLoading(false)
-      console.log('🔍 EventModal onSubmit - Process completed')
     }
   }
 
@@ -653,8 +672,6 @@ if (insertError) {
     
     setLoading(true)
     try {
-      console.log('🗑️ EventModal: Starting event deletion for:', event.id);
-      
       // First, delete event_musicians relationships
       const { error: deleteMusiciansError } = await supabase
         .from('event_musicians')
@@ -663,8 +680,6 @@ if (insertError) {
       
       if (deleteMusiciansError) {
         console.warn('Warning deleting event musicians:', deleteMusiciansError.message);
-      } else {
-        console.log('✅ EventModal: Event musicians deleted successfully');
       }
       
       // Then, delete the event
@@ -677,12 +692,11 @@ if (insertError) {
         throw new Error(`Error deleting event: ${deleteEventError.message}`);
       }
       
-      console.log('✅ EventModal: Event deleted successfully');
       toast.success('Evento eliminado correctamente');
       onClose();
       onSave();
     } catch (error: any) {
-      console.error('❌ EventModal: Error deleting event:', error);
+      console.error('Error deleting event:', error);
       
       let errorMessage = 'Error al eliminar el evento';
       if (error?.message) {
@@ -723,19 +737,7 @@ if (insertError) {
 
         {/* Form */}
         <form 
-          onSubmit={(e) => {
-            console.log('🔥 Form onSubmit triggered - event:', e)
-            console.log('🔥 Form onSubmit - about to call handleSubmit')
-            return handleSubmit(
-              (data) => {
-                console.log('🔥 handleSubmit success callback - data:', data)
-                onSubmit(data)
-              },
-              (errors) => {
-                console.log('🔥 handleSubmit error callback - validation errors:', errors)
-              }
-            )(e)
-          }}
+          onSubmit={handleSubmit(onSubmit)}
           className="p-6 space-y-6"
         >
           {/* Basic Information */}
@@ -783,7 +785,25 @@ if (insertError) {
               />
               {errors.contact_phone && <p className="text-red-500 text-sm mt-1">{errors.contact_phone.message}</p>}
             </div>
-            <div></div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Ubicación *
+              </label>
+              <LocationAutocomplete
+                value={watchedLocation || ''}
+                onChange={(value) => setValue('location', value)}
+                onLocationDataChange={setLocationData}
+                placeholder="Buscar ubicación del evento..."
+                required
+                error={errors.location?.message}
+              />
+              <input
+                type="hidden"
+                {...register('location', { required: 'La ubicación es requerida' })}
+              />
+              {errors.location && <p className="text-red-500 text-sm mt-1">{errors.location.message}</p>}
+            </div>
           </div>
 
           {/* Musicians Selection */}
@@ -795,9 +815,29 @@ if (insertError) {
             
             {loadingMusicians ? (
               <div className="text-center py-4">
-                <p className="text-gray-600">Cargando músicos...</p>
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#2DB2CA]"></div>
+                  <p className="text-gray-600">Cargando músicos...</p>
+                </div>
               </div>
-            ) : (
+            ) : musiciansError ? (
+              <div className="text-center py-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-3">
+                  <p className="text-red-700 text-sm mb-2">⚠️ Error al cargar músicos</p>
+                  <p className="text-red-600 text-xs">{musiciansError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAutoRetryAttempts(0) // Reset auto-retry attempts
+                    setRetryCount(prev => prev + 1)
+                  }}
+                  className="px-4 py-2 bg-[#2DB2CA] text-white rounded-lg hover:bg-[#25a0b8] transition-colors text-sm"
+                >
+                  Reintentar carga
+                </button>
+              </div>
+            ) : musicians.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {musicians.map((musician) => (
                   <label key={musician.id} className="flex items-center space-x-3 p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
@@ -827,20 +867,28 @@ if (insertError) {
                   </label>
                 ))}
               </div>
-            )}
+            ) : null}
             
-            {musicians.length === 0 && !loadingMusicians && (
+            {musicians.length === 0 && !loadingMusicians && !musiciansError && (
               <div className="text-center py-4">
-                <p className="text-gray-600 mb-3">No hay músicos disponibles</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRetryCount(prev => prev + 1)
-                  }}
-                  className="px-4 py-2 bg-[#2DB2CA] text-white rounded-lg hover:bg-[#25a0b8] transition-colors text-sm"
-                >
-                  Reintentar carga
-                </button>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-3">
+                  <p className="text-yellow-700 text-sm mb-2">ℹ️ No hay músicos</p>
+                  <p className="text-yellow-600 text-xs">
+                    {user && profile ? 'No hay músicos registrados en el sistema.' : 'Debes iniciar sesión para ver los músicos'}
+                  </p>
+                </div>
+                {user && profile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAutoRetryAttempts(0) // Reset auto-retry attempts
+                      setRetryCount(prev => prev + 1)
+                    }}
+                    className="px-4 py-2 bg-[#2DB2CA] text-white rounded-lg hover:bg-[#25a0b8] transition-colors text-sm"
+                  >
+                    Reintentar carga
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -889,34 +937,6 @@ if (insertError) {
             </div>
           </div>
 
-          {/* Location */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <MapPin size={16} className="inline mr-1" />
-                Lugar *
-              </label>
-              <input
-                type="text"
-                {...register('venue', { required: 'El lugar es requerido' })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
-                placeholder="Nombre del lugar"
-              />
-              {errors.venue && <p className="text-red-500 text-sm mt-1">{errors.venue.message}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Dirección
-              </label>
-              <input
-                type="text"
-                {...register('address')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
-                placeholder="Dirección completa"
-              />
-            </div>
-          </div>
 
           {/* Band Format and Status */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1007,7 +1027,7 @@ if (insertError) {
                     <input
                       type="number"
                       step="0.01"
-                      value={ivaAmount.toFixed(2)}
+                      value={calculatedAmounts.ivaAmount.toFixed(2)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
                       readOnly
                     />
@@ -1020,7 +1040,7 @@ if (insertError) {
                     <input
                       type="number"
                       step="0.01"
-                      value={totalAmount.toFixed(2)}
+                      value={calculatedAmounts.totalAmount.toFixed(2)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 font-semibold"
                       readOnly
                     />
@@ -1069,7 +1089,7 @@ if (insertError) {
                     <input
                       type="number"
                       step="0.01"
-                      value={advanceIvaAmount.toFixed(2)}
+                      value={calculatedAmounts.advanceIvaAmount.toFixed(2)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
                       readOnly
                     />
@@ -1082,7 +1102,7 @@ if (insertError) {
                     <input
                       type="number"
                       step="0.01"
-                      value={advanceTotalAmount.toFixed(2)}
+                      value={calculatedAmounts.advanceTotalAmount.toFixed(2)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 font-semibold"
                       readOnly
                     />

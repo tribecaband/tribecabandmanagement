@@ -1,6 +1,7 @@
 import React from 'react'
-import { Calendar, MapPin, Users, Clock, Euro, Phone, FileText, User, CheckCircle, XCircle } from 'lucide-react'
+import { Calendar, Users, Clock, Phone, FileText, User, XCircle } from 'lucide-react'
 import { Event as EventType } from '../types'
+import LocationDisplay from './LocationDisplay'
 
 interface EventCardProps {
   event: EventType
@@ -109,12 +110,19 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
     }) + ' €'
   }
 
+  // Always format with fixed number of decimals (used for IVA breakdown)
+  const formatCurrencyFixed = (amount: number, decimals: number) => {
+    const safe = Number.isFinite(Number(amount)) ? Number(amount) : 0
+    return safe.toLocaleString('es-ES', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    }) + ' €'
+  }
+
   // IVA calculations (21%) for display
   const IVA_RATE = 0.21
   const cacheIvaAmount = event.cache_includes_iva ? (Number(event.cache_amount) || 0) * IVA_RATE : 0
-  const cacheTotalWithIva = (Number(event.cache_amount) || 0) + cacheIvaAmount
   const advanceIvaAmount = event.advance_includes_iva ? (Number(event.advance_amount) || 0) * IVA_RATE : 0
-  const advanceTotalWithIva = (Number(event.advance_amount) || 0) + advanceIvaAmount
 
 
 
@@ -141,35 +149,29 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
                   <span>{formatTime(event.event_date)}</span>
                 </span>
               </div>
-              <div className="flex items-center space-x-1 text-xs text-gray-600 mt-0.5">
-                <MapPin size={10} className="text-[#2DB2CA] flex-shrink-0" />
-                <span className="truncate">{event.location || 'Sin ubicación'}</span>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Center Section: Financial & Status - Compact */}
         <div className="col-span-4">
-          <div className="flex items-center justify-between">
-            {/* Financial in a row */}
-            <div className="text-xs">
+          <div className="text-xs space-y-0.5">
+            <div>
               <span className="font-medium text-gray-600">Caché:</span>
               <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.cache_amount)}</span>
               {event.cache_includes_iva && (
-                <span className="text-gray-500 ml-1">(+{formatCurrency(cacheIvaAmount)} IVA → {formatCurrency(cacheTotalWithIva)})</span>
-              )}
-              {(Number(event.advance_amount) > 0) && (
-                <>
-                  <span className="text-gray-400 mx-1">|</span>
-                  <span className="font-medium text-gray-600">Anticipo:</span>
-                  <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.advance_amount)}</span>
-                  {event.advance_includes_iva && (
-                    <span className="text-gray-500 ml-1">(+{formatCurrency(advanceIvaAmount)} IVA → {formatCurrency(advanceTotalWithIva)})</span>
-                  )}
-                </>
+                <span className="text-gray-500 ml-1">(+{formatCurrencyFixed(cacheIvaAmount, 2)} IVA)</span>
               )}
             </div>
+            {(Number(event.advance_amount) > 0) && (
+              <div>
+                <span className="font-medium text-gray-600">Anticipo:</span>
+                <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.advance_amount)}</span>
+                {event.advance_includes_iva && (
+                  <span className="text-gray-500 ml-1">(+{formatCurrencyFixed(advanceIvaAmount, 2)} IVA)</span>
+                )}
+              </div>
+            )}
           </div>
           
           {/* Status and Format in one row */}
@@ -195,7 +197,7 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
         <div className="col-span-4">
           <div className="flex items-start justify-between">
             {/* Contact Info Compact */}
-            <div className="text-xs text-gray-600 flex-1">
+            <div className="text-xs text-gray-600 flex-1 space-y-1">
               {(event.contact_name || event.contact_phone) && (
                 <div className="flex items-center space-x-1">
                   <User size={10} className="text-[#2DB2CA]" />
@@ -207,6 +209,15 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
                     </>
                   )}
                 </div>
+              )}
+              {/* Ubicación */}
+              {event.location && (
+                <LocationDisplay
+                  location={event.location}
+                  showFullAddress={false}
+                  className="text-xs max-w-[200px]"
+                  clickable={true}
+                />
               )}
             </div>
 

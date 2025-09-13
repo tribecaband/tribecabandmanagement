@@ -10,8 +10,11 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
   const { user, profile, loading } = useAuthStore()
+  
+  console.log('🔒 ProtectedRoute state:', { user: !!user, profile: !!profile, loading })
 
   if (loading) {
+    console.log('🔒 ProtectedRoute: still loading, showing spinner')
     return (
       <div className="min-h-screen bg-[#FAF9ED] flex items-center justify-center">
         <div className="text-center">

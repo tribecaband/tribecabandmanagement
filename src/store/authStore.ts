@@ -8,8 +8,6 @@ interface AuthState {
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error?: string }>
   signOut: () => Promise<void>
-  updatePassword: (newPassword: string) => Promise<{ error?: string }>
-  fetchProfile: () => Promise<void>
   initialize: () => Promise<void>
 }
 
@@ -30,12 +28,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       if (data.user) {
+        console.log('✅ SignIn successful, setting user:', data.user.email)
         set({ user: data.user })
-        await get().fetchProfile()
+        
+        // Try to fetch profile in background, don't block login
+        setTimeout(async () => {
+          try {
+            console.log('🔍 Attempting to fetch profile in background...')
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('email', data.user.email)
+              .single()
+            
+            if (profileData) {
+              console.log('✅ Profile loaded successfully')
+              set({ profile: profileData })
+            } else {
+              console.log('⚠️ No profile data found')
+            }
+          } catch (profileError) {
+            console.error('⚠️ Profile fetch failed (non-blocking):', profileError)
+          }
+        }, 100)
       }
 
+      console.log('✅ SignIn completed successfully')
       return {}
     } catch (error) {
+      console.error('❌ SignIn error:', error)
       return { error: 'Error inesperado al iniciar sesión' }
     }
   },
@@ -45,88 +66,55 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: null, profile: null })
   },
 
-  updatePassword: async (newPassword: string) => {
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      })
-
-      if (error) {
-        return { error: error.message }
-      }
-
-      return {}
-    } catch (error) {
-      return { error: 'Error al actualizar la contraseña' }
-    }
-  },
-
-  fetchProfile: async () => {
-    const { user } = get()
-    if (!user) return
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', user.email)
-        .single()
-
-      if (error && error.code === 'PGRST116') {
-        // Profile doesn't exist, create one
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert({
-            email: user.email!,
-            full_name: user.user_metadata?.full_name || user.email!.split('@')[0],
-            role: user.user_metadata?.role || 'user',
-            permissions: { create: false, edit: false, delete: false }
-          })
-          .select()
-          .single()
-
-        if (createError) {
-          console.error('Error creating profile:', createError)
-          return
-        }
-
-        set({ profile: newProfile })
-        return
-      }
-
-      if (error) {
-        console.error('Error fetching profile:', error)
-        return
-      }
-
-      set({ profile: data })
-    } catch (error) {
-      console.error('Error fetching profile:', error)
-    }
-  },
-
   initialize: async () => {
+    console.log('🚀 Initialize starting...')
+    
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get current session if exists
+      console.log('🔍 Checking for existing session...')
+      const { data: { session }, error } = await supabase.auth.getSession()
       
-      if (session?.user) {
+      if (error) {
+        console.log('⚠️ Error getting session:', error)
+      } else if (session?.user) {
+        console.log('✅ Found existing session for:', session.user.email)
         set({ user: session.user })
-        await get().fetchProfile()
+        
+        // Try to get profile in background
+        setTimeout(async () => {
+          try {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('email', session.user.email)
+              .single()
+            
+            if (profileData) {
+              set({ profile: profileData })
+            }
+          } catch (profileError) {
+            console.log('⚠️ Profile fetch failed (non-blocking):', profileError)
+          }
+        }, 100)
+      } else {
+        console.log('ℹ️ No existing session found')
       }
 
-      // Listen for auth changes
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
+      // Setup auth listener for future changes
+      supabase.auth.onAuthStateChange((event, session) => {
+        console.log('🔐 Auth event:', event)
+        if (event === 'SIGNED_IN' && session?.user) {
           set({ user: session.user })
-          await get().fetchProfile()
-        } else {
+        } else if (event === 'SIGNED_OUT') {
           set({ user: null, profile: null })
         }
       })
+      
     } catch (error) {
-      console.error('Error initializing auth:', error)
+      console.error('❌ Initialize error:', error)
     } finally {
       set({ loading: false })
+      console.log('✅ Initialize completed')
     }
   },
 }))

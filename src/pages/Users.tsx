@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Users as UsersIcon, Plus, Search, Edit, Trash2, Shield, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -10,9 +10,11 @@ interface UserWithRole extends Profile {
 }
 
 const Users: React.FC = () => {
-  const { profile } = useAuthStore()
+  const { profile, user } = useAuthStore()
   const [users, setUsers] = useState<UserWithRole[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null)
@@ -23,33 +25,92 @@ const Users: React.FC = () => {
   })
 
   useEffect(() => {
-    fetchUsers()
-  }, [])
+    // Wait for auth to be initialized before fetching
+    if (user && profile) {
+      const timeoutId = setTimeout(() => {
+        fetchUsers()
+      }, 100)
+      return () => clearTimeout(timeoutId)
+    } else {
+      setLoading(false)
+      setError('Debes estar autenticado para ver los usuarios')
+    }
+  }, [user, profile, retryCount])
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
+    if (!user || !profile) {
+      setError('No hay sesión activa')
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
-      const { data, error } = await supabase
+      setError(null)
+      
+      // Verify session is still valid
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        setError('Sesión expirada. Inicia sesión nuevamente.')
+        setLoading(false)
+        return
+      }
+
+      const { data, error: fetchError } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (fetchError) {
+        console.error('Error fetching users:', fetchError)
+        
+        let errorMessage = 'Error al cargar usuarios'
+        
+        if (fetchError.code === '42501' || fetchError.message?.includes('permission denied')) {
+          errorMessage = 'Sin permisos para acceder a los usuarios. Verifica tu sesión.'
+          // Try to refresh the session
+          const refreshSuccess = false
+          if (refreshSuccess) {
+            // Retry after refresh
+            setTimeout(() => fetchUsers(), 1000)
+            return
+          }
+        } else if (fetchError.code === 'PGRST116') {
+          errorMessage = 'No tienes permisos para acceder a los usuarios. Contacta al administrador.'
+        } else if (fetchError.message?.includes('network')) {
+          errorMessage = 'Error de conexión. Verifica tu internet.'
+        }
+        
+        setError(errorMessage)
+        toast.error(errorMessage)
+        return
+      }
 
       // Simulate role assignment (in real app, this would come from database)
       const usersWithRoles = data.map(user => ({
         ...user,
-        role: user.id === profile?.id ? 'admin' : 'user' as 'admin' | 'user'
+        role: user.role || (user.id === profile?.id ? 'admin' : 'user') as 'admin' | 'user'
       }))
 
       setUsers(usersWithRoles)
-    } catch (error) {
-      console.error('Error fetching users:', error)
-      toast.error('Error al cargar usuarios')
+      setError(null)
+    } catch (error: any) {
+      console.error('Exception fetching users:', error)
+      let errorMessage = 'Error inesperado al cargar usuarios'
+      
+      if (error?.message?.includes('fetch') || error?.name === 'NetworkError') {
+        errorMessage = 'Error de conexión. Verifica tu internet e inténtalo de nuevo.'
+      } else if (error?.message?.includes('auth') || error?.status === 401) {
+        errorMessage = 'Error de autenticación. Inicia sesión nuevamente.'
+      }
+      
+      setError(errorMessage)
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, profile, user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -132,6 +193,49 @@ const Users: React.FC = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2DB2CA] mx-auto mb-4"></div>
           <p className="text-gray-600">Cargando usuarios...</p>
+          {!user && (
+            <p className="text-sm text-gray-500 mt-2">Esperando autenticación...</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (error && !user) {
+    return (
+      <div className="min-h-screen bg-[#FAF9ED] flex items-center justify-center">
+        <div className="text-center">
+          <UsersIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-[#2DB2CA] text-white rounded-lg hover:bg-[#25a0b8] transition-colors text-sm"
+          >
+            Recargar página
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#FAF9ED] p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center py-12">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-4">
+              <UsersIcon className="mx-auto h-12 w-12 text-red-400 mb-4" />
+              <p className="text-red-700 font-medium mb-2">Error al cargar usuarios</p>
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+            <button
+              onClick={() => {
+                setRetryCount(prev => prev + 1)
+              }}
+              className="px-4 py-2 bg-[#2DB2CA] text-white rounded-lg hover:bg-[#25a0b8] transition-colors text-sm"
+            >            Reintentar
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -263,7 +367,7 @@ const Users: React.FC = () => {
           </div>
         </div>
 
-        {filteredUsers.length === 0 && (
+        {filteredUsers.length === 0 && !error && (
           <div className="text-center py-12">
             <UsersIcon className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No hay usuarios</h3>

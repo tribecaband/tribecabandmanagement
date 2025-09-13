@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useCallback } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './store/authStore'
@@ -9,9 +9,14 @@ import Dashboard from './pages/Dashboard'
 function App() {
   const { initialize, loading } = useAuthStore()
 
-  useEffect(() => {
+  const memoizedInitialize = useCallback(() => {
     initialize()
-  }, [])
+  }, [initialize])
+
+  useEffect(() => {
+    console.log('App useEffect running')
+    memoizedInitialize()
+  }, [memoizedInitialize])
 
   if (loading) {
     return (
