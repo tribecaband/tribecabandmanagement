@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { X, Save, Calendar, Clock, FileText, Users, Euro, Trash2, User, ChevronDown, Check } from 'lucide-react'
+import { X, Save, Calendar, Clock, FileText, Users, Euro, Trash2, User, ChevronDown, Check, Plus } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { Event as EventType, LocationData } from '../types'
 import LocationAutocomplete from './LocationAutocomplete'
@@ -51,9 +51,11 @@ interface CustomDropdownProps {
   onChange: (value: string) => void
   placeholder: string
   substituteCount: number
+  instrument: string
+  onAddNewMusician: (instrument: string) => void
 }
 
-function CustomDropdown({ options, value, onChange, placeholder, substituteCount }: CustomDropdownProps) {
+function CustomDropdown({ options, value, onChange, placeholder, substituteCount, instrument, onAddNewMusician }: CustomDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -140,6 +142,21 @@ function CustomDropdown({ options, value, onChange, placeholder, substituteCount
               )}
             </button>
           ))}
+
+          {/* Add new musician option */}
+          <button
+            type="button"
+            onClick={() => {
+              onAddNewMusician(instrument)
+              setIsOpen(false)
+            }}
+            className="w-full px-3 py-2 text-left text-sm focus:outline-none flex items-center justify-between group border-t border-gray-100 bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-blue-700"
+          >
+            <span className="flex items-center">
+              <Plus size={14} className="mr-2" />
+              Añadir nuevo músico
+            </span>
+          </button>
         </div>
       )}
     </div>
@@ -178,6 +195,10 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   const [musiciansError, setMusiciansError] = useState<string | null>(null)
   const [autoRetryAttempts, setAutoRetryAttempts] = useState(0)
   const [locationData, setLocationData] = useState<LocationData | null>(null)
+  const [showNewMusicianModal, setShowNewMusicianModal] = useState(false)
+  const [selectedInstrumentForNew, setSelectedInstrumentForNew] = useState<string>('')
+  const [newMusicianName, setNewMusicianName] = useState('')
+  const [creatingMusician, setCreatingMusician] = useState(false)
   
   // Función para manejar cambios en los datos de ubicación
   const handleLocationDataChange = (newLocationData: LocationData | null) => {
@@ -483,6 +504,58 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
       setLoadingMusicians(false)
     }
   }, [user, profile])
+
+  // Function to handle adding new musician
+  const handleAddNewMusician = useCallback((instrument: string) => {
+    setSelectedInstrumentForNew(instrument)
+    setNewMusicianName('')
+    setShowNewMusicianModal(true)
+  }, [])
+
+  // Function to create new musician
+  const createNewMusician = useCallback(async () => {
+    if (!newMusicianName.trim() || !selectedInstrumentForNew || !user) {
+      toast.error('El nombre del músico es requerido')
+      return
+    }
+
+    setCreatingMusician(true)
+    try {
+      const { data: newMusician, error } = await supabase
+        .from('musicians')
+        .insert([{
+          name: newMusicianName.trim(),
+          instrument: selectedInstrumentForNew,
+          is_main: false // New musicians are substitutes by default
+        }])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Add to local musicians state
+      setMusicians(prev => [...prev, newMusician])
+
+      // Auto-select the new musician
+      const currentSelected = watchedSelectedMusicians || []
+      // Remove any previously selected musician from this instrument
+      const instrumentMusicians = musicians.filter(m => m.instrument === selectedInstrumentForNew)
+      const filteredSelected = currentSelected.filter(
+        id => !instrumentMusicians.map(m => m.id).includes(id)
+      )
+      setValue('selected_musicians', [...filteredSelected, newMusician.id])
+
+      toast.success(`Músico "${newMusicianName}" añadido correctamente`)
+      setShowNewMusicianModal(false)
+      setNewMusicianName('')
+      setSelectedInstrumentForNew('')
+    } catch (error: any) {
+      console.error('Error creating musician:', error)
+      toast.error(`Error al crear músico: ${error.message || 'Error desconocido'}`)
+    } finally {
+      setCreatingMusician(false)
+    }
+  }, [newMusicianName, selectedInstrumentForNew, user, musicians, watchedSelectedMusicians, setValue])
 
   // Load musicians on component mount and when authentication changes
   useEffect(() => {
@@ -1007,6 +1080,8 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                           }}
                           placeholder="Sin seleccionar"
                           substituteCount={substituteCount}
+                          instrument={instrument}
+                          onAddNewMusician={handleAddNewMusician}
                         />
                       </div>
                     )
@@ -1312,6 +1387,70 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                 className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
               >
                 {loading ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Musician Modal */}
+      {showNewMusicianModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-60">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Añadir Nuevo Músico
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Instrumento: <span className="font-medium text-[#2DB2CA]">
+                {selectedInstrumentForNew === 'voz' ? 'Voz' :
+                 selectedInstrumentForNew === 'guitarra' ? 'Guitarra' :
+                 selectedInstrumentForNew === 'bajo' ? 'Bajo' :
+                 selectedInstrumentForNew === 'bateria' ? 'Batería' :
+                 selectedInstrumentForNew}
+              </span>
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nombre del Músico *
+              </label>
+              <input
+                type="text"
+                value={newMusicianName}
+                onChange={(e) => setNewMusicianName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !creatingMusician) {
+                    createNewMusician()
+                  }
+                  if (e.key === 'Escape') {
+                    setShowNewMusicianModal(false)
+                  }
+                }}
+                placeholder="Nombre completo del músico"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-end space-x-4">
+              <button
+                onClick={() => {
+                  setShowNewMusicianModal(false)
+                  setNewMusicianName('')
+                  setSelectedInstrumentForNew('')
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                disabled={creatingMusician}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={createNewMusician}
+                disabled={creatingMusician || !newMusicianName.trim()}
+                className="bg-[#2DB2CA] text-white px-6 py-2 rounded-lg hover:bg-[#25a0b5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                <Plus size={16} />
+                <span>{creatingMusician ? 'Creando...' : 'Crear Músico'}</span>
               </button>
             </div>
           </div>
