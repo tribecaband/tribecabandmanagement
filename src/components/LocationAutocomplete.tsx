@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { MapPin, AlertCircle } from 'lucide-react'
 import { LocationData } from '../types'
 
@@ -12,68 +12,72 @@ interface LocationAutocompleteProps {
   error?: string
 }
 
-interface GoogleMapsPlace {
-  formatted_address?: string
-  place_id?: string
-  name?: string
-  vicinity?: string
-  types?: string[]
-  geometry?: {
-    location: {
-      lat: () => number
-      lng: () => number
+// Interfaces para la respuesta de Geoapify
+interface GeoapifyFeature {
+  type: 'Feature'
+  properties: {
+    name?: string
+    country?: string
+    country_code?: string
+    state?: string
+    state_code?: string
+    county?: string
+    county_code?: string
+    postcode?: string
+    city?: string
+    street?: string
+    housenumber?: string
+    lat: number
+    lon: number
+    formatted: string
+    address_line1?: string
+    address_line2?: string
+    result_type?: string
+    distance?: number
+    rank?: {
+      confidence: number
+      confidence_city_level?: number
+      confidence_street_level?: number
+      confidence_building_level?: number
+      match_type?: string
+    }
+    datasource?: {
+      sourcename: string
+      attribution: string
+      license: string
+      url: string
+    }
+    category?: string
+    timezone?: {
+      name: string
+      name_alt?: string
+      offset_STD: string
+      offset_STD_seconds: number
+      offset_DST?: string
+      offset_DST_seconds?: number
+      abbreviation_STD?: string
+      abbreviation_DST?: string
     }
   }
-  address_components?: Array<{
-    long_name: string
-    short_name: string
-    types: string[]
-  }>
+  geometry: {
+    type: 'Point'
+    coordinates: [number, number] // [longitude, latitude]
+  }
 }
 
-interface GoogleMapsPlaces {
-  Autocomplete: new (
-    input: HTMLInputElement,
-    options?: {
-      types?: string[]
-      componentRestrictions?: { country: string }
-      fields?: string[]
+interface GeoapifyResponse {
+  type: 'FeatureCollection'
+  features: GeoapifyFeature[]
+  query: {
+    text: string
+    parsed: {
+      housenumber?: string
+      street?: string
+      postcode?: string
+      city?: string
+      state?: string
+      country?: string
     }
-  ) => {
-    addListener: (event: string, callback: () => void) => void
-    getPlace: () => GoogleMapsPlace
-  }
-  PlacesService: new (
-    attrContainer: HTMLElement
-  ) => {
-    textSearch: (
-      request: { query: string },
-      callback: (results: GoogleMapsPlace[], status: string) => void
-    ) => void
-  }
-  PlacesServiceStatus: {
-    OK: string
-    ZERO_RESULTS: string
-    OVER_QUERY_LIMIT: string
-    REQUEST_DENIED: string
-    INVALID_REQUEST: string
-    UNKNOWN_ERROR: string
-  }
-}
-
-interface GoogleMapsEvent {
-  clearInstanceListeners: (instance: unknown) => void
-}
-
-declare global {
-  interface Window {
-    google: {
-      maps: {
-        places: GoogleMapsPlaces
-        event: GoogleMapsEvent
-      }
-    }
-    initGoogleMaps: () => void
   }
 }
 
@@ -87,283 +91,201 @@ export default function LocationAutocomplete({
   error
 }: LocationAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const autocompleteRef = useRef<{
-    addListener: (event: string, callback: () => void) => void
-    getPlace: () => GoogleMapsPlace
-  } | null>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [suggestions, setSuggestions] = useState<GeoapifyFeature[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Función para convertir datos de Google Places a nuestra estructura
-  const processPlaceData = (place: GoogleMapsPlace): LocationData | null => {
-    if (!place.formatted_address || !place.place_id || !place.geometry?.location) {
-      return null
+  // Obtener la API key desde las variables de entorno
+  const apiKey = import.meta.env.VITE_GEOAPIFY_API_KEY
+
+  // Función para convertir datos de Geoapify a nuestra estructura (compatible con Google Places)
+  const processGeoapifyData = (feature: GeoapifyFeature): LocationData => {
+    const props = feature.properties
+    const [longitude, latitude] = feature.geometry.coordinates
+
+    // Procesar componentes de dirección manteniendo compatibilidad con Google Places
+    const addressComponents = {
+      street_number: props.housenumber,
+      route: props.street,
+      locality: props.city,
+      administrative_area_level_2: props.county,
+      administrative_area_level_1: props.state,
+      country: props.country,
+      postal_code: props.postcode
     }
 
-    // Procesar componentes de dirección
-    const addressComponents: any = {}
-    if (place.address_components) {
-      place.address_components.forEach(component => {
-        if (component.types.includes('street_number')) {
-          addressComponents.street_number = component.long_name
-        } else if (component.types.includes('route')) {
-          addressComponents.route = component.long_name
-        } else if (component.types.includes('locality')) {
-          addressComponents.locality = component.long_name
-        } else if (component.types.includes('administrative_area_level_2')) {
-          addressComponents.administrative_area_level_2 = component.long_name
-        } else if (component.types.includes('administrative_area_level_1')) {
-          addressComponents.administrative_area_level_1 = component.long_name
-        } else if (component.types.includes('country')) {
-          addressComponents.country = component.long_name
-        } else if (component.types.includes('postal_code')) {
-          addressComponents.postal_code = component.long_name
-        }
-      })
+    // Mapear categorías de Geoapify a tipos de Google Places
+    const mapGeoapifyToGoogleTypes = (category?: string, resultType?: string): string[] => {
+      const types: string[] = []
+      
+      if (category) {
+        if (category.includes('catering.bar')) types.push('bar', 'night_club')
+        if (category.includes('catering.restaurant')) types.push('restaurant')
+        if (category.includes('entertainment')) types.push('entertainment')
+        if (category.includes('commercial')) types.push('establishment')
+      }
+      
+      if (resultType) {
+        types.push(resultType)
+      }
+      
+      // Agregar tipos básicos
+      types.push('point_of_interest', 'establishment')
+      
+      return [...new Set(types)] // Eliminar duplicados
     }
 
     return {
-      formatted_address: place.formatted_address,
-      coordinates: {
-        lat: place.geometry.location.lat(),
-        lng: place.geometry.location.lng()
-      },
-      address_components: addressComponents,
-      place_id: place.place_id,
-      place_types: place.types || [],
-      name: place.name,
-      vicinity: place.vicinity,
+      name: props.name || props.address_line1,
+      source: 'geoapify' as const,
+      place_id: `geoapify_${latitude}_${longitude}`,
       created_at: new Date().toISOString(),
-      source: 'google_places'
+      coordinates: {
+        lat: latitude,
+        lng: longitude
+      },
+      place_types: mapGeoapifyToGoogleTypes(props.category, props.result_type),
+      formatted_address: props.formatted,
+      address_components: addressComponents
     }
   }
 
-  useEffect(() => {
-    const loadGoogleMapsAPI = () => {
-      // Si ya está cargado Google Maps
-      if (window.google && window.google.maps && window.google.maps.places) {
-        setIsLoaded(true)
-        return
-      }
-
-      // Si ya existe el script
-      if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-        return
-      }
-
-      // Función callback global
-      window.initGoogleMaps = () => {
-        setIsLoaded(true)
-      }
-
-      // Crear y cargar el script
-      const script = document.createElement('script')
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyAAQ4jvjWoR52eg3icv7bI24zG3-Lf5-_k&libraries=places&callback=initGoogleMaps`
-      script.async = true
-      script.defer = true
-      script.onerror = () => {
-        setApiError('Error al cargar Google Maps API')
-      }
-      document.head.appendChild(script)
-    }
-
-    loadGoogleMapsAPI()
-  }, [])
-
-  useEffect(() => {
-    if (!isLoaded || !inputRef.current || autocompleteRef.current) {
+  // Función para buscar sugerencias en Geoapify
+  const searchSuggestions = useCallback(async (query: string) => {
+    if (!query.trim() || !apiKey) {
+      setSuggestions([])
+      setShowSuggestions(false)
       return
     }
 
+    setIsLoading(true)
+    setApiError(null)
+
     try {
-      console.log('Inicializando Google Maps Autocomplete...');
-      
-      // Crear la instancia de Autocomplete con todos los campos necesarios
-      const autocomplete = new window.google.maps.places.Autocomplete(
-        inputRef.current,
-        {
-          types: ['establishment', 'geocode'],
-          componentRestrictions: { country: 'es' },
-          fields: [
-            'place_id',
-            'formatted_address',
-            'name',
-            'vicinity',
-            'geometry',
-            'address_components',
-            'types'
-          ]
-        }
-      );
-      
-      autocompleteRef.current = autocomplete;
-      console.log('Autocomplete inicializado correctamente:', autocomplete);
-      
-      // IMPORTANTE: Usar el método correcto para añadir el listener
-      autocomplete.addListener('place_changed', function() {
-        console.log('🔍 EVENTO PLACE_CHANGED DISPARADO!');
-        
-        try {
-          // Obtener el lugar seleccionado
-          const place = autocomplete.getPlace();
-          
-          // Verificar si place es un objeto válido
-          if (!place) {
-            console.error('❌ Error: place es null o undefined');
-            return;
-          }
-          
-          // Usar console.dir para una mejor visualización del objeto
-          console.log('===== RESPUESTA DE GOOGLE MAPS =====');
-          console.dir(place);
-          
-          // Mostrar propiedades principales
-          console.log('📍 DATOS PRINCIPALES:');
-          console.log('- Dirección formateada:', place.formatted_address || 'No disponible');
-          console.log('- Place ID:', place.place_id || 'No disponible');
-          console.log('- Nombre:', place.name || 'No disponible');
-          console.log('- Vecindario:', place.vicinity || 'No disponible');
-          console.log('- Tipos:', place.types ? place.types.join(', ') : 'No disponible');
-          
-          // Mostrar coordenadas si existen
-          if (place.geometry && place.geometry.location) {
-            try {
-              const lat = place.geometry.location.lat();
-              const lng = place.geometry.location.lng();
-              console.log('🌍 COORDENADAS:', { lat, lng });
-              
-              // Mostrar URL de Google Maps para estas coordenadas
-              console.log(`🔗 Ver en Google Maps: https://www.google.com/maps?q=${lat},${lng}`);
-            } catch (e) {
-              console.error('❌ Error al obtener coordenadas:', e);
-            }
-          } else {
-            console.log('❌ No hay datos de geometría disponibles');
-          }
-          
-          // Mostrar componentes de dirección
-          if (place.address_components && Array.isArray(place.address_components)) {
-            console.log('🏠 COMPONENTES DE DIRECCIÓN:');
-            place.address_components.forEach(component => {
-              console.log(`- ${component.long_name} (${component.types.join(', ')})`);
-            });
-          }
-          
-          console.log('===== FIN DE RESPUESTA =====');
-          
-          // Actualizar el valor del input
-          if (place.formatted_address) {
-            onChange(place.formatted_address);
-            
-            // Procesar y enviar datos completos
-            if (onLocationDataChange) {
-              const locationData = processPlaceData(place);
-              onLocationDataChange(locationData);
-              console.log('✅ Datos de ubicación procesados:', locationData);
-            }
-          }
-        } catch (error) {
-          console.error('❌ Error en el evento place_changed:', error);
-        }
-      });
-    } catch (err) {
-      setApiError('Error al inicializar el autocompletado')
-      console.error('Error initializing autocomplete:', err)
-    }
+      const url = new URL('https://api.geoapify.com/v1/geocode/autocomplete')
+      url.searchParams.append('text', query)
+      url.searchParams.append('format', 'geojson')
+      url.searchParams.append('apiKey', apiKey)
+      url.searchParams.append('filter', 'countrycode:es') // Filtrar por España
+      url.searchParams.append('limit', '5')
+      url.searchParams.append('lang', 'es')
 
-    return () => {
-      if (autocompleteRef.current && window.google) {
-        window.google.maps.event.clearInstanceListeners(autocompleteRef.current)
+      console.log('🔍 Buscando en Geoapify:', query)
+      console.log('🌐 URL:', url.toString())
+
+      const response = await fetch(url.toString())
+      
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`)
       }
-    }
-  }, [isLoaded, onChange])
 
+      const data: GeoapifyResponse = await response.json()
+      
+      console.log('✅ Respuesta de Geoapify:', data)
+      
+      setSuggestions(data.features || [])
+      setShowSuggestions(true)
+    } catch (err) {
+      console.error('❌ Error al buscar sugerencias:', err)
+      setApiError('Error al buscar ubicaciones')
+      setSuggestions([])
+      setShowSuggestions(false)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [apiKey])
+
+  // Debounce para las búsquedas
+  const debouncedSearch = useCallback((query: string) => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current)
+    }
+
+    debounceTimeoutRef.current = setTimeout(() => {
+      searchSuggestions(query)
+    }, 300)
+  }, [searchSuggestions])
+
+  // Manejar cambios en el input
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value
     onChange(newValue)
     
-    // Añadir console.log para ver cuando el usuario escribe
     console.log('Usuario escribiendo:', newValue)
 
-    // Si se borra el campo o el usuario escribe manualmente, limpiar los datos de ubicación
+    // Si se borra el campo, limpiar los datos de ubicación
     if (onLocationDataChange && !newValue) {
       onLocationDataChange(null)
+      setSuggestions([])
+      setShowSuggestions(false)
+      return
     }
-    
-    // Verificar si el input tiene un valor que coincide con una selección
-    // Este es un enfoque alternativo para detectar cuando se selecciona una ubicación
-    setTimeout(() => {
-      if (inputRef.current) {
-        const currentValue = inputRef.current.value;
-        if (currentValue !== newValue && currentValue.length > 0) {
-          console.log('📢 SELECCIÓN DETECTADA');
-          console.log('📍 Valor seleccionado:', currentValue);
-          
-          // Usar la API de Places para buscar detalles sobre esta ubicación
-          if (window.google && window.google.maps && window.google.maps.places) {
-            try {
-              // Crear un servicio de Places
-              const placesService = new window.google.maps.places.PlacesService(document.createElement('div'));
-              
-              // Buscar lugares que coincidan con el texto
-              placesService.textSearch(
-                { query: currentValue },
-                (results, status) => {
-                  if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
-                    const place = results[0];
-                    console.log('✅ DATOS DEL LUGAR ENCONTRADO:');
-                    console.dir(place);
-                    
-                    // Mostrar detalles principales
-                    console.log('📍 DETALLES:');
-                    console.log('- Nombre:', place.name);
-                    console.log('- Dirección:', place.formatted_address);
-                    console.log('- Place ID:', place.place_id);
-                    console.log('- Tipos:', place.types ? place.types.join(', ') : 'No disponible');
-                    
-                    // Mostrar coordenadas
-                    if (place.geometry && place.geometry.location) {
-                      const lat = place.geometry.location.lat();
-                      const lng = place.geometry.location.lng();
-                      console.log('🌍 COORDENADAS:', { lat, lng });
-                      console.log(`🔗 Ver en Google Maps: https://www.google.com/maps?q=${lat},${lng}`);
-                      
-                      // Crear y enviar los datos de ubicación
-                      if (onLocationDataChange) {
-                        const locationData: LocationData = {
-                          formatted_address: place.formatted_address,
-                          coordinates: {
-                            lat: lat,
-                            lng: lng
-                          },
-                          address_components: {},
-                          place_id: place.place_id,
-                          place_types: place.types || [],
-                          name: place.name,
-                          vicinity: place.vicinity,
-                          created_at: new Date().toISOString(),
-                          source: 'google_places' as const
-                        };
-                        onLocationDataChange(locationData);
-                        console.log('✅ Datos de ubicación procesados:', locationData);
-                      }
-                    }
-                  } else {
-                    console.log('⚠️ No se encontraron resultados para:', currentValue);
-                    console.log('Status:', status);
-                  }
-                }
-              );
-            } catch (error) {
-              console.error('❌ Error al buscar el lugar:', error);
-            }
-          }
-        }
-      }
-    }, 300); // Esperar un poco para dar tiempo a que se actualice el valor
+
+    // Buscar sugerencias con debounce
+    debouncedSearch(newValue)
   }
 
-  if (apiError) {
+  // Manejar selección de una sugerencia
+  const handleSuggestionClick = (feature: GeoapifyFeature) => {
+    console.log('🖱️ CLICK DETECTADO en sugerencia:', feature.properties.formatted)
+    
+    const formattedAddress = feature.properties.formatted
+    onChange(formattedAddress)
+    
+    console.log('📍 Ubicación seleccionada:', feature)
+    console.log('🔄 onLocationDataChange disponible:', !!onLocationDataChange)
+    
+    // Procesar y enviar datos completos
+    if (onLocationDataChange) {
+      const locationData = processGeoapifyData(feature)
+      console.log('📊 Datos procesados antes de enviar:', locationData)
+      console.log('🏷️ Source del locationData:', locationData.source)
+      console.log('🆔 Place ID generado:', locationData.place_id)
+      onLocationDataChange(locationData)
+      console.log('✅ Datos de ubicación enviados al componente padre')
+    } else {
+      console.log('⚠️ onLocationDataChange no está disponible')
+    }
+    
+    setShowSuggestions(false)
+    setSuggestions([])
+    console.log('🔒 Sugerencias cerradas')
+  }
+
+  // Manejar clic fuera del componente
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      
+      // No cerrar si el clic es en el input o en una sugerencia
+      if (inputRef.current && !inputRef.current.contains(target)) {
+        // Verificar si el clic es en una sugerencia
+        const suggestionElement = (target as Element).closest('[data-suggestion]')
+        if (!suggestionElement) {
+          setShowSuggestions(false)
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  // Limpiar timeout al desmontar
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  // Verificar si la API key está configurada
+  if (!apiKey) {
     return (
       <div className={`relative ${className}`}>
         <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
@@ -379,31 +301,10 @@ export default function LocationAutocomplete({
             error ? 'border-red-500' : ''
           }`}
         />
-        {(error || apiError) && (
-          <div className="flex items-center mt-1 text-sm text-red-600">
-            <AlertCircle size={14} className="mr-1" />
-            <span>{error || apiError}</span>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  if (!isLoaded) {
-    return (
-      <div className={`relative ${className}`}>
-        <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-          <MapPin size={16} className="text-gray-400" />
+        <div className="flex items-center mt-1 text-sm text-red-600">
+          <AlertCircle size={14} className="mr-1" />
+          <span>API key de Geoapify no configurada</span>
         </div>
-        <input
-          type="text"
-          value={value}
-          onChange={handleInputChange}
-          placeholder="Cargando autocompletado..."
-          required={required}
-          disabled
-          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
-        />
       </div>
     )
   }
@@ -423,11 +324,71 @@ export default function LocationAutocomplete({
         className={`w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent ${
           error ? 'border-red-500' : ''
         }`}
+        autoComplete="off"
       />
-      {error && (
+      
+      {/* Indicador de carga */}
+      {isLoading && (
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#2DB2CA]"></div>
+        </div>
+      )}
+      
+      {/* Lista de sugerencias */}
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {suggestions.map((feature, index) => (
+            <div
+              key={`${feature.properties.lat}_${feature.properties.lon}_${index}`}
+              className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+              data-suggestion="true"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                console.log('🎯 onClick ejecutándose para:', feature.properties.formatted)
+                handleSuggestionClick(feature)
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                console.log('🖱️ onMouseDown ejecutándose para:', feature.properties.formatted)
+                handleSuggestionClick(feature)
+              }}
+            >
+              <div className="flex items-start">
+                <MapPin size={16} className="text-gray-400 mt-0.5 mr-3 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 truncate">
+                    {feature.properties.name || feature.properties.address_line1 || feature.properties.formatted}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {feature.properties.formatted}
+                  </div>
+                  {feature.properties.result_type && (
+                    <div className="text-xs text-blue-600 mt-1">
+                      {feature.properties.result_type}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {/* Mensaje cuando no hay resultados */}
+      {showSuggestions && suggestions.length === 0 && !isLoading && value.trim() && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+          <div className="px-4 py-3 text-sm text-gray-500">
+            No se encontraron ubicaciones
+          </div>
+        </div>
+      )}
+      
+      {/* Errores */}
+      {(error || apiError) && (
         <div className="flex items-center mt-1 text-sm text-red-600">
           <AlertCircle size={14} className="mr-1" />
-          <span>{error}</span>
+          <span>{error || apiError}</span>
         </div>
       )}
     </div>

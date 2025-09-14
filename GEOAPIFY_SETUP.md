@@ -1,8 +1,12 @@
 # Configuración de Geoapify API
 
-Este proyecto ahora utiliza Geoapify API en lugar de Nominatim para mejorar la búsqueda de direcciones con números específicos (como "Avenida Donostiarra 17").
+## ❌ Error 401: API Key Inválida
 
-## ¿Por qué Geoapify?
+El error `❌ Error al buscar sugerencias: Error: Error HTTP: 401` indica que la API key de Geoapify no es válida o ha expirado.
+
+## 🔑 Cómo obtener una API key válida de Geoapify
+
+### ¿Por qué Geoapify?
 
 - **Mejor soporte para direcciones con números**: Geoapify tiene mejor precisión para encontrar direcciones específicas con números de casa
 - **Plan gratuito generoso**: 3,000 requests por día sin tarjeta de crédito <mcreference link="https://www.geoapify.com/get-started-with-maps-api/" index="1">1</mcreference>

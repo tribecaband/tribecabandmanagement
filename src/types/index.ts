@@ -36,7 +36,7 @@ export interface LocationData {
 
   // Metadatos del sistema
   created_at: string;
-  source: 'google_places' | 'manual';
+  source: 'google_places' | 'geoapify' | 'manual';
 }
 
 export interface User {

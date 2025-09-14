@@ -77,6 +77,15 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   const [autoRetryAttempts, setAutoRetryAttempts] = useState(0)
   const [locationData, setLocationData] = useState<LocationData | null>(null)
   
+  // Función para manejar cambios en los datos de ubicación
+  const handleLocationDataChange = (newLocationData: LocationData | null) => {
+    console.log('🔄 EventModal recibiendo nuevos datos de ubicación:', newLocationData)
+    console.log('🏷️ Source de los nuevos datos:', newLocationData?.source)
+    console.log('🆔 Place ID de los nuevos datos:', newLocationData?.place_id)
+    setLocationData(newLocationData)
+    console.log('✅ LocationData actualizado en EventModal')
+  }
+  
   // Helper to avoid hanging requests (wraps a function that returns a Promise)
   async function withTimeout<T>(fn: () => Promise<T>, ms: number, label: string): Promise<T> {
     return await Promise.race<T>([
@@ -444,6 +453,10 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   }, [event?.id, loadSelectedMusicians, user, profile])
 
   const onSubmit = async (data: FormData) => {
+    console.log('🚀 EventModal onSubmit - Iniciando envío del formulario');
+    console.log('📍 LocationData actual:', locationData);
+    console.log('📝 Form data location:', data.location);
+    
     // Verificar autenticación antes de proceder
     if (!user || !profile) {
       toast.error('Debes estar autenticado para realizar esta acción')
@@ -481,6 +494,8 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           advance_includes_iva: !!data.advance_has_iva,
           invoice_status: data.status
         }
+        console.log('🔄 Datos para actualización:', updateData);
+        console.log('📍 Location data que se enviará:', updateData.location);
         const updateResp: any = await withTimeout(
           async () => await supabase
             .from('events')
@@ -579,6 +594,8 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
+        console.log('➕ Datos para creación:', createData);
+        console.log('📍 Location data que se enviará:', createData.location);
         
         const createResp: any = await withTimeout(
           async () => await supabase
@@ -793,7 +810,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
               <LocationAutocomplete
                 value={watchedLocation || ''}
                 onChange={(value) => setValue('location', value)}
-                onLocationDataChange={setLocationData}
+                onLocationDataChange={handleLocationDataChange}
                 placeholder="Buscar ubicación del evento..."
                 required
                 error={errors.location?.message}
