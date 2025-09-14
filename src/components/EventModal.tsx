@@ -74,8 +74,8 @@ function CustomDropdown({ options, value, onChange, placeholder, substituteCount
   const selectedOption = options.find(opt => opt.id === value)
 
   const displayText = selectedOption
-    ? `${selectedOption.name}${selectedOption.is_main ? ' ★' : ''}${substituteCount > 0 ? ` (+${substituteCount} sustitutos)` : ''}`
-    : (substituteCount > 0 ? `${placeholder} (+${substituteCount} opciones)` : placeholder)
+    ? `${selectedOption.name}${selectedOption.is_main ? ' ★' : ''}`
+    : placeholder
 
   // Sort options: main musicians first, then alphabetical
   const sortedOptions = [...options].sort((a, b) => {
@@ -114,7 +114,7 @@ function CustomDropdown({ options, value, onChange, placeholder, substituteCount
             }}
             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none border-b border-gray-100 text-gray-500"
           >
-            {substituteCount > 0 ? `Sin seleccionar (+${substituteCount} opciones)` : 'Sin seleccionar'}
+            Sin seleccionar
           </button>
 
           {sortedOptions.map((option) => (
@@ -627,6 +627,22 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
     }
   }, [event?.id, loadSelectedMusicians, user, profile])
 
+  // Auto-select all principal musicians when creating a new event
+  useEffect(() => {
+    if (!event && musicians.length > 0 && user && profile) {
+      const principalMusicians = musicians.filter(musician => musician.is_main)
+      const principalMusicianIds = principalMusicians.map(musician => musician.id)
+      
+      if (principalMusicianIds.length > 0) {
+        setValue('selected_musicians', principalMusicianIds)
+        
+        // Update band format based on selected musicians
+        const automaticFormat = getAutomaticBandFormat(principalMusicianIds)
+        setValue('band_format', automaticFormat)
+      }
+    }
+  }, [event, musicians, setValue, user, profile])
+
   const onSubmit = async (data: FormData) => {
     console.log('🚀 EventModal onSubmit - Iniciando envío del formulario');
     console.log('📍 LocationData actual:', locationData);
@@ -1054,8 +1070,13 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
 
                     return (
                       <div key={instrument} className="bg-white p-4 rounded-lg border border-gray-200">
-                        <h4 className="font-medium text-gray-700 mb-3 text-sm">
-                          {instrumentLabels[instrument as keyof typeof instrumentLabels] || instrument}
+                        <h4 className="font-medium text-gray-700 mb-3 text-sm flex items-center justify-between">
+                          <span>{instrumentLabels[instrument as keyof typeof instrumentLabels] || instrument}</span>
+                          {instrumentMusicians.length > 1 && (
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                              {instrumentMusicians.length} opciones
+                            </span>
+                          )}
                         </h4>
 
                         <CustomDropdown
@@ -1182,21 +1203,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
               </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Estado de Facturación
-              </label>
-              <select
-                {...register('status')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
-              >
-                {INVOICE_STATUS_OPTIONS.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+
           </div>
 
           {/* Financial Information */}

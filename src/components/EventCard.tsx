@@ -255,17 +255,19 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
       {/* Bottom Section: Comments and Musicians (if any) - Ultra Compact */}
       {(event.comments || (event.musicians && Object.keys(event.musicians).length > 0)) && (
         <div className="mt-1.5 pt-1.5 border-t border-gray-100">
-          <div className="flex items-center space-x-4 text-xs text-gray-600">
-            {/* Comments inline */}
-            {event.comments && (
-              <div className="flex items-center space-x-1 flex-1 min-w-0">
-                <FileText size={9} className="text-[#2DB2CA] flex-shrink-0" />
-                <span className="font-medium">Comentarios:</span>
-                <span className="truncate">{event.comments}</span>
-              </div>
-            )}
+          <div className="flex items-center justify-between text-xs text-gray-600">
+            {/* Comments section - takes available space */}
+            <div className="flex items-center space-x-1 flex-1 min-w-0">
+              {event.comments && (
+                <>
+                  <FileText size={9} className="text-[#2DB2CA] flex-shrink-0" />
+                  <span className="font-medium">Comentarios:</span>
+                  <span className="truncate">{event.comments}</span>
+                </>
+              )}
+            </div>
             
-            {/* Musicians inline */}
+            {/* Musicians section - always positioned on the right */}
             {event.musicians && Object.keys(event.musicians).length > 0 && (
               <div className="flex items-center space-x-1 flex-shrink-0">
                 <span className="font-medium">Músicos:</span>
