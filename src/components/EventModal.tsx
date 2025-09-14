@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { X, Save, Calendar, Clock, FileText, Users, Euro, Trash2, User } from 'lucide-react'
+import { X, Save, Calendar, Clock, FileText, Users, Euro, Trash2, User, ChevronDown, Check } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { Event as EventType, LocationData } from '../types'
 import LocationAutocomplete from './LocationAutocomplete'
@@ -43,6 +43,108 @@ interface Musician {
 }
 
 // Band format is now calculated automatically based on event_musicians count
+
+// Custom Dropdown Component for Musician Selection
+interface CustomDropdownProps {
+  options: { id: string; name: string; is_main: boolean }[]
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  substituteCount: number
+}
+
+function CustomDropdown({ options, value, onChange, placeholder, substituteCount }: CustomDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const selectedOption = options.find(opt => opt.id === value)
+
+  const displayText = selectedOption
+    ? `${selectedOption.name}${selectedOption.is_main ? ' ★' : ''}${substituteCount > 0 ? ` (+${substituteCount} sustitutos)` : ''}`
+    : (substituteCount > 0 ? `${placeholder} (+${substituteCount} opciones)` : placeholder)
+
+  // Sort options: main musicians first, then alphabetical
+  const sortedOptions = [...options].sort((a, b) => {
+    if (a.is_main && !b.is_main) return -1
+    if (!a.is_main && b.is_main) return 1
+    return a.name.localeCompare(b.name)
+  })
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full px-3 py-2 text-sm border rounded-lg text-left focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent transition-all duration-200 flex items-center justify-between ${
+          selectedOption
+            ? 'border-[#2DB2CA] bg-blue-50 text-blue-800 font-medium'
+            : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+        }`}
+      >
+        <span className="truncate">{displayText}</span>
+        <ChevronDown
+          size={16}
+          className={`ml-2 transition-transform duration-200 ${
+            isOpen ? 'rotate-180' : 'rotate-0'
+          } ${selectedOption ? 'text-blue-600' : 'text-gray-400'}`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          <button
+            type="button"
+            onClick={() => {
+              onChange('')
+              setIsOpen(false)
+            }}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none border-b border-gray-100 text-gray-500"
+          >
+            {substituteCount > 0 ? `Sin seleccionar (+${substituteCount} opciones)` : 'Sin seleccionar'}
+          </button>
+
+          {sortedOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => {
+                onChange(option.id)
+                setIsOpen(false)
+              }}
+              className={`w-full px-3 py-2 text-left text-sm focus:outline-none flex items-center justify-between group ${
+                option.id === value
+                  ? 'bg-blue-50 text-blue-800'
+                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+              }`}
+            >
+              <span className="flex items-center">
+                {option.name}
+                {option.is_main && (
+                  <span className="ml-2 text-[#2DB2CA] text-xs">★</span>
+                )}
+              </span>
+              {option.id === value && (
+                <Check size={14} className="text-blue-600" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const BAND_FORMATS = [
   { value: 'solo', label: 'Solo (1 músico)', musicians: 1 },
@@ -855,34 +957,61 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                 </button>
               </div>
             ) : musicians.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {musicians.map((musician) => (
-                  <label key={musician.id} className="flex items-center space-x-3 p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      value={musician.id}
-                      checked={watchedSelectedMusicians?.includes(musician.id) || false}
-                      onChange={(e) => {
-                        const currentSelected = watchedSelectedMusicians || []
-                        if (e.target.checked) {
-                          setValue('selected_musicians', [...currentSelected, musician.id])
-                        } else {
-                          setValue('selected_musicians', currentSelected.filter(id => id !== musician.id))
-                        }
-                      }}
-                      className="w-4 h-4 text-[#2DB2CA] border-gray-300 rounded focus:ring-[#2DB2CA]"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{musician.name}</p>
-                      <p className="text-xs text-gray-500">{musician.instrument}</p>
-                      {musician.is_main && (
-                        <span className="inline-block px-2 py-1 text-xs bg-[#2DB2CA] text-white rounded-full mt-1">
-                          Principal
-                        </span>
-                      )}
-                    </div>
-                  </label>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {(() => {
+                  // Group musicians by instrument
+                  const groupedMusicians = musicians.reduce((acc, musician) => {
+                    if (!acc[musician.instrument]) {
+                      acc[musician.instrument] = []
+                    }
+                    acc[musician.instrument].push(musician)
+                    return acc
+                  }, {} as Record<string, Musician[]>)
+
+                  const instrumentLabels = {
+                    voz: 'Voz',
+                    guitarra: 'Guitarra',
+                    bajo: 'Bajo',
+                    bateria: 'Batería'
+                  }
+
+                  return Object.entries(groupedMusicians).map(([instrument, instrumentMusicians]) => {
+                    const selectedMusician = instrumentMusicians.find(m => watchedSelectedMusicians?.includes(m.id))
+                    const substituteCount = instrumentMusicians.filter(m => !m.is_main).length
+
+                    return (
+                      <div key={instrument} className="bg-white p-4 rounded-lg border border-gray-200">
+                        <h4 className="font-medium text-gray-700 mb-3 text-sm">
+                          {instrumentLabels[instrument as keyof typeof instrumentLabels] || instrument}
+                        </h4>
+
+                        <CustomDropdown
+                          options={instrumentMusicians.map(m => ({
+                            id: m.id,
+                            name: m.name,
+                            is_main: m.is_main
+                          }))}
+                          value={selectedMusician?.id || ''}
+                          onChange={(value) => {
+                            const currentSelected = watchedSelectedMusicians || []
+                            // Remove any previously selected musician from this instrument
+                            const filteredSelected = currentSelected.filter(
+                              id => !instrumentMusicians.map(m => m.id).includes(id)
+                            )
+                            // Add new selection if any
+                            if (value) {
+                              setValue('selected_musicians', [...filteredSelected, value])
+                            } else {
+                              setValue('selected_musicians', filteredSelected)
+                            }
+                          }}
+                          placeholder="Sin seleccionar"
+                          substituteCount={substituteCount}
+                        />
+                      </div>
+                    )
+                  })
+                })()}
               </div>
             ) : null}
             
