@@ -74,8 +74,8 @@ function CustomDropdown({ options, value, onChange, placeholder, substituteCount
   const selectedOption = options.find(opt => opt.id === value)
 
   const displayText = selectedOption
-    ? `${selectedOption.name}${selectedOption.is_main ? ' ★' : ''}${substituteCount > 0 ? ` (+${substituteCount} sustitutos)` : ''}`
-    : (substituteCount > 0 ? `${placeholder} (+${substituteCount} opciones)` : placeholder)
+    ? `${selectedOption.name}${selectedOption.is_main ? ' ★' : ''}`
+    : placeholder
 
   // Sort options: main musicians first, then alphabetical
   const sortedOptions = [...options].sort((a, b) => {
@@ -114,7 +114,7 @@ function CustomDropdown({ options, value, onChange, placeholder, substituteCount
             }}
             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none border-b border-gray-100 text-gray-500"
           >
-            {substituteCount > 0 ? `Sin seleccionar (+${substituteCount} opciones)` : 'Sin seleccionar'}
+            Sin seleccionar
           </button>
 
           {sortedOptions.map((option) => (
@@ -986,11 +986,11 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <User size={16} className="inline mr-1" />
-                Persona de Contacto *
+                Persona de Contacto
               </label>
               <input
                 type="text"
-                {...register('contact_person', { required: 'La persona de contacto es requerida' })}
+                {...register('contact_person')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
                 placeholder="Nombre de la persona de contacto"
               />
@@ -1002,11 +1002,11 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Teléfono de Contacto *
+                Teléfono de Contacto
               </label>
               <input
                 type="tel"
-                {...register('contact_phone', { required: 'El teléfono de contacto es requerido' })}
+                {...register('contact_phone')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
                 placeholder="Ej: +34 600 123 456"
               />
@@ -1015,19 +1015,18 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ubicación *
+                Ubicación
               </label>
               <LocationAutocomplete
                 value={watchedLocation || ''}
                 onChange={(value) => setValue('location', value)}
                 onLocationDataChange={handleLocationDataChange}
                 placeholder="Buscar ubicación del evento..."
-                required
                 error={errors.location?.message}
               />
               <input
                 type="hidden"
-                {...register('location', { required: 'La ubicación es requerida' })}
+                {...register('location')}
               />
               {errors.location && <p className="text-red-500 text-sm mt-1">{errors.location.message}</p>}
             </div>
@@ -1089,8 +1088,13 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
 
                     return (
                       <div key={instrument} className="bg-white p-4 rounded-lg border border-gray-200">
-                        <h4 className="font-medium text-gray-700 mb-3 text-sm">
-                          {instrumentLabels[instrument as keyof typeof instrumentLabels] || instrument}
+                        <h4 className="font-medium text-gray-700 mb-3 text-sm flex items-center justify-between">
+                          <span>{instrumentLabels[instrument as keyof typeof instrumentLabels] || instrument}</span>
+                          {instrumentMusicians.length > 1 && (
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                              {instrumentMusicians.length} opciones
+                            </span>
+                          )}
                         </h4>
 
                         <CustomDropdown
@@ -1244,19 +1248,20 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Importe Base (€) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    {...register('base_amount', { 
-                      required: 'El importe base es requerido',
-                      min: { value: 0, message: 'El importe debe ser positivo' }
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
-                    placeholder="0.00"
-                  />
-                  {errors.base_amount && <p className="text-red-500 text-sm mt-1">{errors.base_amount.message}</p>}
+                <Euro size={16} className="inline mr-1" />
+                Importe Base (€)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                {...register('base_amount', { 
+                  min: { value: 0, message: 'El importe debe ser mayor o igual a 0' }
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
+                placeholder="0.00"
+              />
+              {errors.base_amount && <p className="text-red-500 text-sm mt-1">{errors.base_amount.message}</p>}
                 </div>
                 
                 <div>
@@ -1444,7 +1449,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
 
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre del Músico *
+                Nombre del Músico
               </label>
               <input
                 type="text"
