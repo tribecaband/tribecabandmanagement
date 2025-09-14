@@ -57,6 +57,7 @@ export interface Event {
   location?: LocationData | string; // Soporte para migración gradual
   event_types: string[];
   band_format: string;
+  duration?: number; // Duración en minutos
   cache_amount: number;
   cache_includes_iva?: boolean;
   advance_amount: number;
@@ -65,6 +66,7 @@ export interface Event {
   comments?: string;
   musicians_count?: number;
   musicians?: Record<string, string>;
+  substitutes?: Record<string, string>; // Sustitutos por instrumento: { 'voz': 'Nombre Sustituto', 'guitarra': 'Otro Sustituto' }
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -89,8 +91,24 @@ export interface EventMusician {
   instrument: string;
   payment_amount: number;
   payment_status: 'pending' | 'paid';
+  substitute_name?: string; // Nombre del sustituto para este músico/instrumento
   created_at: string;
   updated_at: string;
+}
+
+// Nuevo tipo para manejar sustitutos por instrumento
+export interface EventSubstitute {
+  instrument: 'voz' | 'guitarra' | 'bajo' | 'bateria';
+  substitute_name: string;
+}
+
+// Tipo para el músico con información de sustituto
+export interface MusicianWithSubstitute {
+  id: string;
+  name: string;
+  instrument: 'voz' | 'guitarra' | 'bajo' | 'bateria';
+  is_main: boolean;
+  substitute_name?: string;
 }
 
 export interface BandFormat {

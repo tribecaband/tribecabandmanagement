@@ -108,6 +108,7 @@ export interface Database {
           instrument: string;
           payment_amount: number;
           payment_status: 'pending' | 'paid';
+          substitute_name?: string;
           created_at: string;
           updated_at: string;
         };
@@ -118,6 +119,7 @@ export interface Database {
           instrument: string;
           payment_amount: number;
           payment_status?: 'pending' | 'paid';
+          substitute_name?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -128,6 +130,7 @@ export interface Database {
           instrument?: string;
           payment_amount?: number;
           payment_status?: 'pending' | 'paid';
+          substitute_name?: string;
           created_at?: string;
           updated_at?: string;
         };

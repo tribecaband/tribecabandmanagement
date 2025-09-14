@@ -74,8 +74,8 @@ function CustomDropdown({ options, value, onChange, placeholder, substituteCount
   const selectedOption = options.find(opt => opt.id === value)
 
   const displayText = selectedOption
-    ? `${selectedOption.name}${selectedOption.is_main ? ' ★' : ''}`
-    : placeholder
+    ? `${selectedOption.name}${selectedOption.is_main ? ' ★' : ''}${substituteCount > 0 ? ` (+${substituteCount} sustitutos)` : ''}`
+    : (substituteCount > 0 ? `${placeholder} (+${substituteCount} opciones)` : placeholder)
 
   // Sort options: main musicians first, then alphabetical
   const sortedOptions = [...options].sort((a, b) => {
@@ -114,7 +114,7 @@ function CustomDropdown({ options, value, onChange, placeholder, substituteCount
             }}
             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none border-b border-gray-100 text-gray-500"
           >
-            Sin seleccionar
+            {substituteCount > 0 ? `Sin seleccionar (+${substituteCount} opciones)` : 'Sin seleccionar'}
           </button>
 
           {sortedOptions.map((option) => (
@@ -227,7 +227,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
       date: '',
       time: '',
       band_format: 'trio',
-      duration: 3,
+      duration: 180, // Cambiado a minutos (3 horas = 180 minutos)
       base_amount: 0,
       base_has_iva: false,
       iva_amount: 0,
@@ -248,6 +248,23 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   const watchedAdvanceHasIva = watch('advance_has_iva')
   const watchedSelectedMusicians = watch('selected_musicians')
   const watchedLocation = watch('location')
+  const watchedDuration = watch('duration')
+
+  // Función para formatear minutos a horas y minutos
+  const formatDuration = (minutes: number): string => {
+    if (!minutes || minutes <= 0) return '0 minutos'
+    
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+    
+    if (hours === 0) {
+      return `${remainingMinutes} minuto${remainingMinutes !== 1 ? 's' : ''}`
+    } else if (remainingMinutes === 0) {
+      return `${hours} hora${hours !== 1 ? 's' : ''}`
+    } else {
+      return `${hours} hora${hours !== 1 ? 's' : ''} y ${remainingMinutes} minuto${remainingMinutes !== 1 ? 's' : ''}`
+    }
+  }
 
   // Memoized calculated values for display
   const calculatedAmounts = useMemo(() => {
@@ -317,7 +334,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         date: eventDate.toISOString().split('T')[0],
         time: eventDate.toTimeString().slice(0, 5),
         band_format: event.band_format || '',
-        duration: 3,
+        duration: event.duration || 180, // Usar duración del evento o 180 minutos por defecto
         base_amount: event.cache_amount || 0,
         base_has_iva: !!event.cache_includes_iva,
         iva_amount: 0,
@@ -678,6 +695,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             created_at: new Date().toISOString(),
             source: 'manual' as const
           }, // Usar datos completos o crear un objeto manual
+          duration: Number(data.duration) || 180,
           comments: data.notes,
           cache_amount: Number(data.base_amount) || 0,
           cache_includes_iva: !!data.base_has_iva,
@@ -775,6 +793,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             created_at: new Date().toISOString(),
             source: 'manual' as const
           }, // Usar datos completos o crear un objeto manual
+          duration: Number(data.duration) || 180,
           comments: data.notes,
           cache_amount: Number(data.base_amount) || 0,
           cache_includes_iva: !!data.base_has_iva,
@@ -1070,13 +1089,8 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
 
                     return (
                       <div key={instrument} className="bg-white p-4 rounded-lg border border-gray-200">
-                        <h4 className="font-medium text-gray-700 mb-3 text-sm flex items-center justify-between">
-                          <span>{instrumentLabels[instrument as keyof typeof instrumentLabels] || instrument}</span>
-                          {instrumentMusicians.length > 1 && (
-                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                              {instrumentMusicians.length} opciones
-                            </span>
-                          )}
+                        <h4 className="font-medium text-gray-700 mb-3 text-sm">
+                          {instrumentLabels[instrument as keyof typeof instrumentLabels] || instrument}
                         </h4>
 
                         <CustomDropdown
@@ -1166,16 +1180,27 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Clock size={16} className="inline mr-1" />
-                Duración (horas)
+                Duración (minutos) *
               </label>
               <input
                 type="number"
-                step="0.5"
-                min="1"
-                max="12"
-                {...register('duration', { min: 1, max: 12 })}
+                step="15"
+                min="15"
+                max="720"
+                {...register('duration', { 
+                  required: 'La duración es requerida',
+                  min: { value: 15, message: 'La duración mínima es 15 minutos' },
+                  max: { value: 720, message: 'La duración máxima es 12 horas (720 minutos)' }
+                })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
+                placeholder="Ej: 90, 120, 180..."
               />
+              {errors.duration && <p className="text-red-500 text-sm mt-1">{errors.duration.message}</p>}
+              {watchedDuration && watchedDuration > 0 && (
+                <p className="text-sm text-gray-600 mt-1">
+                  <span className="font-medium">Equivale a:</span> {formatDuration(watchedDuration)}
+                </p>
+              )}
             </div>
           </div>
 
