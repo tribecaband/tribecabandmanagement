@@ -1201,7 +1201,47 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
               </label>
               <input
                 type="date"
-                {...register('date', { required: 'La fecha es requerida' })}
+                {...register('date', { 
+                  required: 'La fecha es requerida',
+                  validate: (value) => {
+                    if (!value) return 'La fecha es requerida'
+                    const year = new Date(value).getFullYear()
+                    if (year < 1000 || year > 9999) {
+                      return 'El año debe tener exactamente 4 dígitos'
+                    }
+                    return true
+                  }
+                })}
+                onKeyDown={(e) => {
+                  // Permitir teclas de navegación y control
+                  if (['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                    return
+                  }
+                  // Permitir Ctrl+A, Ctrl+C, Ctrl+V, etc.
+                  if (e.ctrlKey || e.metaKey) {
+                    return
+                  }
+                  // Para campos de fecha, el navegador maneja la entrada automáticamente
+                  // pero podemos prevenir entrada de caracteres no válidos
+                  if (!/[0-9\-\/]/.test(e.key)) {
+                    e.preventDefault()
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = e.target.value
+                  if (value) {
+                    const date = new Date(value)
+                    const year = date.getFullYear()
+                    // Si el año no tiene 4 dígitos, corregirlo
+                    if (year < 1000 || year > 9999) {
+                      // Resetear el campo si el año no es válido
+                      e.target.value = ''
+                      toast.error('Por favor, ingrese un año válido de 4 dígitos')
+                    }
+                  }
+                }}
+                min="1000-01-01"
+                max="9999-12-31"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
               />
               {errors.date && <p className="text-red-500 text-sm mt-1">{errors.date.message}</p>}

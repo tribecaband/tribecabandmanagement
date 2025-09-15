@@ -15,11 +15,22 @@ export default function LocationDisplay({
   className = "",
   clickable = true
 }: LocationDisplayProps) {
+  // Verificar si la ubicación está vacía o no tiene datos válidos
   if (!location) {
     return (
       <div className={`flex items-center text-gray-400 ${className}`}>
         <MapPin size={16} className="mr-2" />
         <span className="text-sm">Sin ubicación</span>
+      </div>
+    )
+  }
+
+  // Si es un objeto LocationData, verificar si tiene datos válidos
+  if (typeof location === 'object' && (!location.formatted_address || location.formatted_address.trim() === '')) {
+    return (
+      <div className={`flex items-center text-gray-400 ${className}`}>
+        <MapPin size={16} className="mr-2" />
+        <span className="text-sm italic">Falta añadir lugar</span>
       </div>
     )
   }

@@ -159,18 +159,29 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
           <div className="text-xs space-y-0.5">
             <div>
               <span className="font-medium text-gray-600">Caché:</span>
-              <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.cache_amount)}</span>
-              {event.cache_includes_iva && (
-                <span className="text-gray-500 ml-1">(+{formatCurrencyFixed(cacheIvaAmount, 2)} IVA)</span>
+              {event.cache_amount && Number(event.cache_amount) > 0 ? (
+                <>
+                  <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.cache_amount)}</span>
+                  {event.cache_includes_iva && (
+                    <span className="text-gray-500 ml-1">(+{formatCurrencyFixed(cacheIvaAmount, 2)} IVA)</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-gray-400 italic ml-1">Sin definir</span>
               )}
             </div>
-            {(Number(event.advance_amount) > 0) && (
+            {(Number(event.advance_amount) > 0) ? (
               <div>
                 <span className="font-medium text-gray-600">Anticipo:</span>
                 <span className="font-semibold text-gray-800 ml-1">{formatCurrency(event.advance_amount)}</span>
                 {event.advance_includes_iva && (
                   <span className="text-gray-500 ml-1">(+{formatCurrencyFixed(advanceIvaAmount, 2)} IVA)</span>
                 )}
+              </div>
+            ) : (
+              <div>
+                <span className="font-medium text-gray-600">Anticipo:</span>
+                <span className="text-gray-400 italic ml-1">No definido</span>
               </div>
             )}
           </div>
@@ -183,7 +194,11 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
             </div>
             <div className="flex items-center space-x-1">
               <Users size={10} className="text-[#2DB2CA]" />
-              <span className="font-medium text-gray-600">{getBandFormatText(event.band_format)}</span>
+              <span className="font-medium text-gray-600">
+                {event.band_format ? getBandFormatText(event.band_format) : (
+                  <span className="text-gray-400 italic">Sin formato</span>
+                )}
+              </span>
             </div>
           </div>
         </div>
@@ -193,27 +208,33 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
           <div className="flex items-start justify-between">
             {/* Contact Info Compact */}
             <div className="text-xs text-gray-600 flex-1 space-y-1">
-              {(event.contact_name || event.contact_phone) && (
-                <div className="flex items-center space-x-1">
-                  <User size={10} className="text-[#2DB2CA]" />
-                  <span className="font-medium">{event.contact_name || 'Sin nombre'}</span>
-                  {event.contact_phone && (
-                    <>
-                      <Phone size={10} className="text-[#2DB2CA] ml-2" />
-                      <span>{event.contact_phone}</span>
-                    </>
+              {/* Contacto - siempre mostrar */}
+              <div className="flex items-center space-x-1">
+                <User size={10} className="text-[#2DB2CA]" />
+                <span className="font-medium">
+                  {event.contact_name || (
+                    <span className="text-gray-400 italic">Falta añadir contacto</span>
                   )}
-                </div>
-              )}
-              {/* Ubicación */}
-              {event.location && (
+                </span>
+                {event.contact_phone ? (
+                  <>
+                    <Phone size={10} className="text-[#2DB2CA] ml-2" />
+                    <span>{event.contact_phone}</span>
+                  </>
+                ) : (
+                  <span className="text-gray-400 italic ml-2">Sin teléfono</span>
+                )}
+              </div>
+              
+              {/* Ubicación - siempre mostrar */}
+              <div className="flex items-center space-x-1">
                 <LocationDisplay
                   location={event.location}
                   showFullAddress={false}
                   className="text-xs max-w-[200px]"
                   clickable={true}
                 />
-              )}
+              </div>
             </div>
 
             {/* Action Buttons - Horizontal and smaller */}
@@ -248,37 +269,37 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
       </div>
 
       {/* Bottom Section: Comments and Musicians (if any) - Ultra Compact */}
-      {(event.comments || (event.musicians && Object.keys(event.musicians).length > 0)) && (
-        <div className="mt-1.5 pt-1.5 border-t border-gray-100">
-          <div className="flex items-center justify-between text-xs text-gray-600">
-            {/* Comments section - takes available space */}
-            <div className="flex items-center space-x-1 flex-1 min-w-0">
-              {event.comments && (
-                <>
-                  <FileText size={9} className="text-[#2DB2CA] flex-shrink-0" />
-                  <span className="font-medium">Comentarios:</span>
-                  <span className="truncate">{event.comments}</span>
-                </>
-              )}
-            </div>
-            
-            {/* Musicians section - always positioned on the right */}
-            {event.musicians && Object.keys(event.musicians).length > 0 && (
-              <div className="flex items-center space-x-1 flex-shrink-0">
-                <span className="font-medium">Músicos:</span>
-                <span className="text-xs">
-                  {Object.entries(event.musicians).map(([instrument, musician], index, array) => (
-                    <span key={instrument}>
-                      <span className="capitalize">{instrument}</span>: <span className="font-medium">{musician}</span>
-                      {index < array.length - 1 && ', '}
-                    </span>
-                  ))}
-                </span>
-              </div>
+      <div className="mt-1.5 pt-1.5 border-t border-gray-100">
+        <div className="flex items-center justify-between text-xs text-gray-600">
+          {/* Comments section - takes available space */}
+          <div className="flex items-center space-x-1 flex-1 min-w-0">
+            <FileText size={9} className="text-[#2DB2CA] flex-shrink-0" />
+            <span className="font-medium">Comentarios:</span>
+            {event.comments ? (
+              <span className="truncate">{event.comments}</span>
+            ) : (
+              <span className="text-gray-400 italic">Sin comentarios</span>
+            )}
+          </div>
+          
+          {/* Musicians section - always positioned on the right */}
+          <div className="flex items-center space-x-1 flex-shrink-0">
+            <span className="font-medium">Músicos:</span>
+            {event.musicians && Object.keys(event.musicians).length > 0 ? (
+              <span className="text-xs">
+                {Object.entries(event.musicians).map(([instrument, musician], index, array) => (
+                  <span key={instrument}>
+                    <span className="capitalize">{instrument}</span>: <span className="font-medium">{musician}</span>
+                    {index < array.length - 1 && ', '}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="text-gray-400 italic">Sin asignar</span>
             )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

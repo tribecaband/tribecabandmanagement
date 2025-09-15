@@ -211,11 +211,9 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
             </div>
 
             {/* Ubicación */}
-            {getLocationText(event.location) && (
-              <div className="text-[10px] text-gray-600 truncate mb-1">
-                📍 {getLocationText(event.location)}
-              </div>
-            )}
+            <div className="text-[10px] text-gray-600 truncate mb-1">
+              📍 {getLocationText(event.location) || 'Falta añadir lugar'}
+            </div>
 
             {/* Tipo de Evento y Formato */}
             <div className="flex items-center justify-between text-[10px]">
