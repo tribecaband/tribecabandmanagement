@@ -42,31 +42,6 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'yes':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'advance':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'no':
-        return 'bg-red-100 text-red-800 border-red-200'
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'yes':
-        return 'Sí'
-      case 'advance':
-        return 'Anticipo'
-      case 'no':
-        return 'No'
-      default:
-        return status
-    }
-  }
 
   const getBandFormatText = (format: string) => {
     if (!format) return 'Banda'
@@ -200,14 +175,8 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
             )}
           </div>
           
-          {/* Status and Format in one row */}
+          {/* Format and Alta status */}
           <div className="flex items-center space-x-3 text-xs mt-1">
-            <div className="flex items-center space-x-1">
-              <span className="font-medium text-gray-600">¿Factura?</span>
-              <span className={`px-1 py-0.5 rounded text-xs font-medium ${getStatusColor(event.invoice_status)}`}>
-                {getStatusText(event.invoice_status)}
-              </span>
-            </div>
             <div className="flex items-center space-x-1">
               <span className="font-medium text-gray-600">¿Alta?</span>
               <span className="text-red-600 font-medium">No</span>
