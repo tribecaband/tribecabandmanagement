@@ -103,7 +103,7 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
 
   const renderSelectedDateEvents = () => {
     const dayEvents = getEventsForDate(selectedDate)
-    
+
     if (dayEvents.length === 0) {
       return (
         <div className="text-center py-3 text-gray-500 text-xs bg-gray-50 rounded-md">
@@ -112,28 +112,125 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
       )
     }
 
+    const getEventTypeText = (types: string[] = []) => {
+      if (!types || types.length === 0) return 'Evento'
+      const firstType = types[0]
+      switch (firstType.toLowerCase()) {
+        case 'boda':
+        case 'wedding':
+          return 'Boda'
+        case 'corporativo':
+        case 'corporate':
+          return 'Corporativo'
+        case 'privado':
+        case 'private':
+          return 'Privado'
+        case 'concierto':
+        case 'concert':
+          return 'Concierto'
+        case 'fiesta':
+          return 'Fiesta'
+        case 'celebracion':
+          return 'Celebración'
+        case 'otros':
+          return 'Otros'
+        default:
+          return firstType.charAt(0).toUpperCase() + firstType.slice(1)
+      }
+    }
+
+    const getBandFormatText = (format: string) => {
+      if (!format) return 'Banda'
+      switch (format.toLowerCase()) {
+        case 'solo':
+          return 'Solo'
+        case 'dúo':
+        case 'duo':
+          return 'Dúo'
+        case 'trío':
+        case 'trio':
+          return 'Trío'
+        case 'cuarteto':
+        case 'quartet':
+          return 'Cuarteto'
+        case 'quinteto':
+        case 'quintet':
+          return 'Quinteto'
+        case 'sexteto':
+        case 'sextet':
+          return 'Sexteto'
+        case 'banda':
+        case 'band':
+          return 'Banda'
+        default:
+          return format
+      }
+    }
+
+    const getLocationText = (location: any) => {
+      if (!location) return ''
+
+      if (typeof location === 'string') {
+        return location
+      } else if (location.formatted_address) {
+        // Si es un lugar (place) y tiene nombre, mostrar el nombre
+        const isPlace = location.place_types &&
+          location.place_types.some((type: string) =>
+            ['restaurant', 'bar', 'cafe', 'hotel', 'store', 'establishment', 'point_of_interest'].includes(type)
+          )
+
+        if (isPlace && location.name && location.name !== location.formatted_address) {
+          return location.name
+        } else {
+          return location.formatted_address
+        }
+      }
+
+      return ''
+    }
+
     return (
-      <div className="space-y-1.5 max-h-32 overflow-y-auto">
-        {dayEvents.slice(0, 3).map((event) => (
+      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+        {dayEvents.slice(0, 4).map((event) => (
           <div
             key={event.id}
             onClick={() => onEventClick(event)}
             className="p-2 bg-white border border-gray-200 rounded-md cursor-pointer hover:border-[#2DB2CA] transition-colors group"
           >
-            <div className="font-medium text-xs text-gray-800 truncate group-hover:text-[#2DB2CA]">
-              {event.name}
+            {/* Título y Hora */}
+            <div className="flex items-center justify-between mb-1">
+              <div className="font-medium text-xs text-gray-800 truncate group-hover:text-[#2DB2CA] flex-1 pr-2">
+                {event.name}
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium flex-shrink-0">
+                {new Date(event.event_date).toLocaleTimeString('es-ES', {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </div>
             </div>
-            <div className="text-[10px] text-gray-500 mt-0.5">
-              {new Date(event.event_date).toLocaleTimeString('es-ES', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })}
+
+            {/* Ubicación */}
+            {getLocationText(event.location) && (
+              <div className="text-[10px] text-gray-600 truncate mb-1">
+                📍 {getLocationText(event.location)}
+              </div>
+            )}
+
+            {/* Tipo de Evento y Formato */}
+            <div className="flex items-center justify-between text-[10px]">
+              <div className="text-blue-600 font-medium">
+                {getEventTypeText(event.event_types)}
+              </div>
+              <div className="text-orange-600 font-medium">
+                {getBandFormatText(event.band_format)}
+              </div>
             </div>
           </div>
         ))}
-        {dayEvents.length > 3 && (
+        {dayEvents.length > 4 && (
           <div className="text-xs text-gray-500 text-center py-1">
-            +{dayEvents.length - 3} más
+            +{dayEvents.length - 4} más
           </div>
         )}
       </div>
