@@ -21,6 +21,7 @@ interface FormData {
   date: string
   time: string
   duration?: number
+  event_types: string[]
   band_format: string
   status: string
   base_amount: number
@@ -178,6 +179,16 @@ const INVOICE_STATUS_OPTIONS = [
   { value: 'advance', label: 'Anticipo Facturado' }
 ]
 
+const EVENT_TYPE_OPTIONS = [
+  { value: 'boda', label: 'Boda' },
+  { value: 'corporativo', label: 'Evento Corporativo' },
+  { value: 'privado', label: 'Evento Privado' },
+  { value: 'concierto', label: 'Concierto' },
+  { value: 'fiesta', label: 'Fiesta' },
+  { value: 'celebracion', label: 'Celebración' },
+  { value: 'otros', label: 'Otros' }
+]
+
 // Function to get automatic band format based on selected musicians
 const getAutomaticBandFormat = (selectedMusicianIds: string[]): string => {
   const count = selectedMusicianIds.length
@@ -228,6 +239,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
       time: '',
       band_format: 'trio',
       duration: 180, // Cambiado a minutos (3 horas = 180 minutos)
+      event_types: [],
       base_amount: 0,
       base_has_iva: false,
       iva_amount: 0,
@@ -249,6 +261,7 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
   const watchedSelectedMusicians = watch('selected_musicians')
   const watchedLocation = watch('location')
   const watchedDuration = watch('duration')
+  const watchedEventTypes = watch('event_types')
 
   // Función para formatear minutos a horas y minutos
   const formatDuration = (minutes: number): string => {
@@ -331,10 +344,13 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
         contact_person: event.contact_name,
         contact_phone: event.contact_phone || '',
         location: locationValue,
-        date: eventDate.toISOString().split('T')[0],
+        date: eventDate.getFullYear() + '-' +
+              String(eventDate.getMonth() + 1).padStart(2, '0') + '-' +
+              String(eventDate.getDate()).padStart(2, '0'),
         time: eventDate.toTimeString().slice(0, 5),
         band_format: event.band_format || '',
         duration: event.duration || 180, // Usar duración del evento o 180 minutos por defecto
+        event_types: event.event_types || [],
         base_amount: event.cache_amount || 0,
         base_has_iva: !!event.cache_includes_iva,
         iva_amount: 0,
@@ -695,7 +711,9 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             created_at: new Date().toISOString(),
             source: 'manual' as const
           }, // Usar datos completos o crear un objeto manual
+          location_backup_text: data.location || '', // Add required backup text
           duration: Number(data.duration) || 180,
+          event_types: data.event_types || [],
           comments: data.notes,
           cache_amount: Number(data.base_amount) || 0,
           cache_includes_iva: !!data.base_has_iva,
@@ -793,16 +811,16 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
             created_at: new Date().toISOString(),
             source: 'manual' as const
           }, // Usar datos completos o crear un objeto manual
+          location_backup_text: data.location || '', // Add required backup text
           duration: Number(data.duration) || 180,
+          event_types: data.event_types || [],
           comments: data.notes,
           cache_amount: Number(data.base_amount) || 0,
           cache_includes_iva: !!data.base_has_iva,
           advance_amount: Number(data.advance_amount) || 0,
           advance_includes_iva: !!data.advance_has_iva,
           invoice_status: data.status,
-          created_by: profile?.id || user?.id || '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_by: profile?.id || user?.id || ''
         }
         console.log('➕ Datos para creación:', createData);
         console.log('📍 Location data que se enviará:', createData.location);
@@ -1030,6 +1048,27 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
               />
               {errors.location && <p className="text-red-500 text-sm mt-1">{errors.location.message}</p>}
             </div>
+          </div>
+
+          {/* Event Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tipo de Evento
+            </label>
+            <select
+              value={watchedEventTypes?.[0] || ''}
+              onChange={(e) => {
+                setValue('event_types', e.target.value ? [e.target.value] : [])
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
+            >
+              <option value="">Seleccionar tipo de evento</option>
+              {EVENT_TYPE_OPTIONS.map((eventType) => (
+                <option key={eventType.value} value={eventType.value}>
+                  {eventType.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Musicians Selection */}

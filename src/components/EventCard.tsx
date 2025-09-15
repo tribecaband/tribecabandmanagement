@@ -27,6 +27,21 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
     })
   }
 
+  const formatDuration = (minutes?: number): string => {
+    if (!minutes || minutes <= 0) return ''
+
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+
+    if (hours === 0) {
+      return `${remainingMinutes}min`
+    } else if (remainingMinutes === 0) {
+      return `${hours}h`
+    } else {
+      return `${hours}h ${remainingMinutes}min`
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'yes':
@@ -97,8 +112,15 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
       case 'concierto':
       case 'concert':
         return 'Concierto'
+      case 'fiesta':
+        return 'Fiesta'
+      case 'celebracion':
+        return 'Celebración'
+      case 'otros':
+        return 'Otros'
       default:
-        return firstType
+        // Capitalize first letter for any unmatched type
+        return firstType.charAt(0).toUpperCase() + firstType.slice(1)
     }
   }
 
@@ -147,6 +169,10 @@ export default function EventCard({ event, onClick, onDelete }: EventCardProps) 
                 <span className="flex items-center space-x-1">
                   <Clock size={10} className="text-[#2DB2CA]" />
                   <span>{formatTime(event.event_date)}</span>
+                </span>
+                <span className="flex items-center space-x-1">
+                  <Clock size={10} className="text-green-600" />
+                  <span className="text-green-600 font-medium">{formatDuration(event.duration || 180)}</span>
                 </span>
               </div>
             </div>

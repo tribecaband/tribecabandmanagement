@@ -113,7 +113,9 @@ export default function Dashboard() {
           musicians: musiciansObject, // Transform to expected format
           // Ensure numeric fields are numbers
           cache_amount: Number(event.cache_amount) || 0,
-          advance_amount: Number(event.advance_amount) || 0
+          advance_amount: Number(event.advance_amount) || 0,
+          duration: event.duration ? Number(event.duration) : undefined,
+          event_types: event.event_types || []
         }
       }) || []
       
