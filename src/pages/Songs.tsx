@@ -11,6 +11,7 @@ const Songs: React.FC = () => {
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [unifiedQuery, setUnifiedQuery] = useState('');
+  const [repertoireFilter, setRepertoireFilter] = useState('');
   const [deezerResults, setDeezerResults] = useState<DeezerTrack[]>([]);
   const [deezerLoading, setDeezerLoading] = useState(false);
   const [addingFromDeezer, setAddingFromDeezer] = useState<string | null>(null);
@@ -46,9 +47,9 @@ const Songs: React.FC = () => {
 
   // Filtrar canciones localmente
   const filteredSongs = songs.filter(song => 
-    song.title.toLowerCase().includes(unifiedQuery.toLowerCase()) ||
-    song.artist.toLowerCase().includes(unifiedQuery.toLowerCase()) ||
-    (song.album && song.album.toLowerCase().includes(unifiedQuery.toLowerCase()))
+    song.title.toLowerCase().includes(repertoireFilter.toLowerCase()) ||
+    song.artist.toLowerCase().includes(repertoireFilter.toLowerCase()) ||
+    (song.album && song.album.toLowerCase().includes(repertoireFilter.toLowerCase()))
   );
 
   // Buscar en Deezer con debounce
@@ -86,7 +87,7 @@ const Songs: React.FC = () => {
     }
   }, [songs]);
 
-  // Efecto para búsqueda unificada con debounce
+  // Efecto para búsqueda de Deezer con debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (unifiedQuery.trim()) {
@@ -258,6 +259,127 @@ const Songs: React.FC = () => {
     }
   };
 
+  // Nueva función para reproducir canciones guardadas usando deezer_id
+  const handlePlaySavedSong = async (song: Song, trackId: string) => {
+    try {
+      // Si ya hay algo reproduciéndose, pausarlo completamente
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+        audioElement.src = ''; // Limpiar la fuente
+        audioElement.load(); // Forzar la limpieza del elemento
+        
+        // Si es la misma canción, solo pausar
+        if (currentlyPlaying === trackId && currentSongId === trackId) {
+          setCurrentlyPlaying(null);
+          setCurrentSongId(null);
+          setIsLoading(false);
+          setAudioProgress(0);
+          setAudioElement(null);
+          return;
+        }
+      }
+
+      // Limpiar estado anterior completamente
+      setCurrentlyPlaying(null);
+      setCurrentSongId(null);
+      setAudioProgress(0);
+      setAudioDuration(0);
+      setAudioElement(null);
+      
+      // Establecer estado de carga
+      setIsLoading(true);
+      setCurrentSongId(trackId);
+
+      // Obtener URL de preview fresca usando deezer_id
+      let previewUrl: string | null = null;
+      
+      if (song.deezer_id) {
+        previewUrl = await DeezerService.getPreviewUrl(song.deezer_id);
+      }
+      
+      // Si no se pudo obtener URL fresca, usar la guardada como fallback
+      if (!previewUrl && song.preview_url && DeezerService.isValidPreviewUrl(song.preview_url)) {
+        previewUrl = song.preview_url;
+        console.warn('Usando preview URL guardada como fallback para:', song.title);
+      }
+      
+      if (!previewUrl) {
+        throw new Error('Esta canción no tiene preview disponible en este momento');
+      }
+
+      // Crear nuevo elemento de audio
+      const audio = new Audio();
+      audio.volume = 0.7;
+      audio.preload = 'metadata';
+      
+      // Promesa para manejar la carga del audio
+      const audioLoadPromise = new Promise<void>((resolve, reject) => {
+        const handleCanPlay = () => {
+          setIsLoading(false);
+          setCurrentlyPlaying(trackId);
+          audio.removeEventListener('canplay', handleCanPlay);
+          audio.removeEventListener('error', handleError);
+          resolve();
+        };
+        
+        const handleError = (event: Event) => {
+          console.error('Error al cargar audio:', previewUrl, event);
+          audio.removeEventListener('canplay', handleCanPlay);
+          audio.removeEventListener('error', handleError);
+          reject(new Error('Error al cargar el audio'));
+        };
+        
+        audio.addEventListener('canplay', handleCanPlay);
+        audio.addEventListener('error', handleError);
+      });
+      
+      // Establecer el nuevo audio y la fuente
+      setAudioElement(audio);
+      audio.src = previewUrl;
+      
+      // Esperar a que el audio esté listo y luego reproducir
+      await audioLoadPromise;
+      
+      // Intentar reproducir solo después de que esté listo
+      try {
+        await audio.play();
+      } catch (playError: any) {
+        // Manejar específicamente el AbortError
+        if (playError.name === 'AbortError') {
+          console.log('Reproducción interrumpida por otra acción');
+          return; // No mostrar error al usuario, es comportamiento esperado
+        }
+        throw playError; // Re-lanzar otros errores
+      }
+      
+    } catch (error: any) {
+      console.error('Error al reproducir preview de canción guardada:', error);
+      
+      // Solo mostrar toast de error si no es un AbortError
+      if (error.name !== 'AbortError') {
+        let errorMessage = 'Error al reproducir el preview';
+        
+        if (error.message?.includes('preview disponible')) {
+          errorMessage = 'Esta canción no tiene preview disponible';
+        } else if (error.message?.includes('cargar el audio')) {
+          errorMessage = 'No se pudo cargar el audio de la canción';
+        } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+          errorMessage = 'Error de conexión. Verifica tu internet';
+        }
+        
+        toast.error(errorMessage);
+      }
+      
+      // Limpiar estado en caso de error
+      setCurrentlyPlaying(null);
+      setCurrentSongId(null);
+      setIsLoading(false);
+      setAudioProgress(0);
+      setAudioElement(null);
+    }
+  };
+
   const handlePausePreview = () => {
     if (audioElement) {
       audioElement.pause();
@@ -324,12 +446,10 @@ const Songs: React.FC = () => {
       await SongsService.addSongFromDeezer(track);
       toast.success(`"${track.title}" agregada al repertorio`);
       await loadSongs();
-      // Remover de resultados de Deezer
-      setDeezerResults(prev => prev.filter(t => t.id !== track.id));
-      // Cerrar dropdown después de agregar
-      if (deezerResults.length <= 1) {
-        setShowDropdown(false);
-      }
+      // Limpiar búsqueda de Deezer después de agregar
+      setUnifiedQuery('');
+      setDeezerResults([]);
+      setShowDropdown(false);
     } catch (error: any) {
       console.error('Error al agregar canción:', error);
       toast.error(error.message || 'Error al agregar la canción');
@@ -410,7 +530,7 @@ const Songs: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar en repertorio o agregar desde Deezer..."
+              placeholder="Buscar y agregar canciones desde Deezer..."
               value={unifiedQuery}
               onChange={(e) => setUnifiedQuery(e.target.value)}
               onFocus={() => unifiedQuery && deezerResults.length > 0 && setShowDropdown(true)}
@@ -569,6 +689,22 @@ const Songs: React.FC = () => {
               </span>
             </h2>
             
+            {/* Buscador del repertorio */}
+            {songs.length > 0 && (
+              <div className="mb-4 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filtrar canciones del repertorio..."
+                  value={repertoireFilter}
+                  onChange={(e) => setRepertoireFilter(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+              </div>
+            )}
+            
             {/* Tabla para desktop */}
             <div className="hidden md:block bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="overflow-x-auto" style={{overflow: 'visible'}}>
@@ -609,9 +745,9 @@ const Songs: React.FC = () => {
                                       src={song.album_cover}
                                       alt={song.album || song.title}
                                     />
-                                    {song.preview_url && DeezerService.isValidPreviewUrl(song.preview_url) && (
+                                    {(song.deezer_id || (song.preview_url && DeezerService.isValidPreviewUrl(song.preview_url))) && (
                               <button
-                                onClick={() => isPlaying && currentSongId === `song-${song.id}` ? handlePausePreview() : handlePlayPreview(song.preview_url!, `song-${song.id}`)}
+                                onClick={() => isPlaying && currentSongId === `song-${song.id}` ? handlePausePreview() : handlePlaySavedSong(song, `song-${song.id}`)}
                                 className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 rounded-lg"
                                 disabled={isLoading && currentSongId === `song-${song.id}`}
                               >
@@ -716,9 +852,9 @@ const Songs: React.FC = () => {
                               src={song.album_cover}
                               alt={song.album || song.title}
                             />
-                            {song.preview_url && DeezerService.isValidPreviewUrl(song.preview_url) && (
+                            {(song.deezer_id || (song.preview_url && DeezerService.isValidPreviewUrl(song.preview_url))) && (
                                <button
-                                 onClick={() => isPlaying && currentSongId === `song-${song.id}` ? handlePausePreview() : handlePlayPreview(song.preview_url!, `song-${song.id}`)}
+                                 onClick={() => isPlaying && currentSongId === `song-${song.id}` ? handlePausePreview() : handlePlaySavedSong(song, `song-${song.id}`)}
                                  className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 rounded-lg"
                                  disabled={isLoading && currentSongId === `song-${song.id}`}
                                >
@@ -799,6 +935,13 @@ const Songs: React.FC = () => {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Mensaje cuando no hay canciones filtradas */}
+        {filteredSongs.length === 0 && songs.length > 0 && repertoireFilter.trim() !== '' && (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No se encontraron canciones en tu repertorio que coincidan con "<span className="font-medium">{repertoireFilter}</span>".</p>
           </div>
         )}
 

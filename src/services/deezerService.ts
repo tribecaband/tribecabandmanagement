@@ -320,6 +320,45 @@ export class DeezerService {
   }
 
   /**
+   * Obtener URL de preview fresca para una canción por su Deezer ID
+   * @param deezerId ID de la canción en Deezer
+   * @returns Promise con la URL de preview o null si no está disponible
+   */
+  static async getPreviewUrl(deezerId: string): Promise<string | null> {
+    if (!deezerId || deezerId.trim() === '') {
+      console.warn('ID de Deezer inválido para obtener preview');
+      return null;
+    }
+
+    try {
+      // Obtener información completa de la canción
+      const track = await this.getTrackById(deezerId);
+      
+      // Verificar si tiene preview disponible
+      if (track.preview && this.isValidPreviewUrl(track.preview)) {
+        console.log(`Preview URL obtenida para canción ${deezerId}`);
+        return track.preview;
+      } else {
+        console.warn(`No hay preview disponible para la canción ${deezerId}`);
+        return null;
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+      
+      // Proporcionar mensajes más específicos según el tipo de error
+      if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+        console.error(`Error de red al obtener preview para canción ${deezerId}:`, errorMsg);
+      } else if (errorMsg.includes('HTTP')) {
+        console.error(`Error del servidor al obtener preview para canción ${deezerId}:`, errorMsg);
+      } else {
+        console.error(`Error al obtener preview URL para canción ${deezerId}:`, errorMsg);
+      }
+      
+      return null;
+    }
+  }
+
+  /**
    * Validar si una URL de preview es válida
    * @param url URL del preview
    * @returns true si la URL es válida

@@ -108,7 +108,7 @@ export class SongsService {
         album: deezerTrack.album.title,
         duration: deezerTrack.duration,
         deezer_id: deezerTrack.id,
-        preview_url: deezerTrack.preview,
+        // No guardamos preview_url ya que expira - se obtendrá dinámicamente
         album_cover: deezerTrack.album.cover_medium,
         key_signature: '' // Asignar tono vacío por defecto
       };
