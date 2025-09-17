@@ -6,6 +6,7 @@
 graph TD
     A[Navegador del Usuario] --> B[Aplicación Frontend React]
     B --> C[SDK de Supabase]
+    B --> H[API de Deezer]
     C --> D[Servicios de Supabase]
     
     subgraph "Capa Frontend"
@@ -19,6 +20,10 @@ graph TD
         G[Políticas RLS]
     end
     
+    subgraph "Servicios Externos"
+        H
+    end
+    
     D --> E
     D --> F
     D --> G
@@ -30,7 +35,8 @@ graph TD
 - **Backend**: Supabase (BaaS completo)
 - **Base de Datos**: Supabase PostgreSQL
 - **Autenticación**: Supabase Auth
-- **Librerías adicionales**: React Calendar, Lucide React (iconos), React Hot Toast
+- **APIs Externas**: Deezer API (búsqueda de canciones)
+- **Librerías adicionales**: React Calendar, Lucide React (iconos), React Hot Toast, Axios (peticiones HTTP)
 
 ## 3. Definiciones de Rutas
 
@@ -40,6 +46,7 @@ graph TD
 | /login | Página de inicio de sesión y cambio de contraseña |
 | /users | Gestión de usuarios (solo admins) |
 | /users/new | Formulario para crear nuevo usuario (solo admins) |
+| /songs | Gestión de canciones con listado de repertorio y búsqueda en Deezer |
 
 ## 4. Definiciones de API
 
@@ -77,6 +84,31 @@ POST /rest/v1/profiles
 PATCH /rest/v1/profiles?id=eq.{id}
 ```
 
+**Gestión de canciones**
+```
+GET /rest/v1/songs
+POST /rest/v1/songs
+DELETE /rest/v1/songs?id=eq.{id}
+```
+
+**API Externa de Deezer**
+```
+GET https://api.deezer.com/search?q={query}&type=track
+```
+
+Request:
+| Nombre del Parámetro | Tipo | Requerido | Descripción |
+|---------------------|------|-----------|-------------|
+| q | string | true | Término de búsqueda (título, artista, etc.) |
+| type | string | true | Tipo de búsqueda (track para canciones) |
+| limit | number | false | Número máximo de resultados (por defecto 25) |
+
+Response:
+| Nombre del Parámetro | Tipo | Descripción |
+|---------------------|------|-------------|
+| data | array | Array de canciones encontradas |
+| total | number | Total de resultados disponibles |
+
 Ejemplo de evento:
 ```json
 {
@@ -101,6 +133,22 @@ Ejemplo de evento:
 }
 ```
 
+Ejemplo de canción:
+```json
+{
+  "id": "uuid-cancion",
+  "title": "Bohemian Rhapsody",
+  "artist": "Queen",
+  "album": "A Night at the Opera",
+  "duration": 355,
+  "deezer_id": "3135556",
+  "preview_url": "https://cdns-preview-d.dzcdn.net/stream/...",
+  "album_cover": "https://api.deezer.com/album/302127/image",
+  "added_by": "uuid-usuario",
+  "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
 ## 5. Modelo de Datos
 
 ### 5.1 Definición del Modelo de Datos
@@ -108,6 +156,7 @@ Ejemplo de evento:
 ```mermaid
 erDiagram
     PROFILES ||--o{ EVENTS : creates
+    PROFILES ||--o{ SONGS : adds
     EVENTS ||--o{ EVENT_MUSICIANS : has
     MUSICIANS ||--o{ EVENT_MUSICIANS : assigned_to
     MUSICIANS ||--o{ MUSICIAN_SUBSTITUTES : has_substitute
@@ -166,6 +215,19 @@ erDiagram
         uuid id PK
         uuid main_musician_id FK
         uuid substitute_musician_id FK
+        timestamp created_at
+    }
+    
+    SONGS {
+        uuid id PK
+        string title
+        string artist
+        string album
+        integer duration
+        string deezer_id
+        string preview_url
+        string album_cover
+        uuid added_by FK
         timestamp created_at
     }
 ```
@@ -235,12 +297,30 @@ CREATE TABLE musician_substitutes (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Crear tabla de canciones
+CREATE TABLE songs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(200) NOT NULL,
+    artist VARCHAR(200) NOT NULL,
+    album VARCHAR(200),
+    duration INTEGER, -- Duración en segundos
+    deezer_id VARCHAR(50) UNIQUE,
+    preview_url TEXT,
+    album_cover TEXT,
+    added_by UUID REFERENCES profiles(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Crear índices
 CREATE INDEX idx_events_date ON events(event_date DESC);
 CREATE INDEX idx_events_created_by ON events(created_by);
 CREATE INDEX idx_events_active ON events(is_active);
 CREATE INDEX idx_profiles_email ON profiles(email);
 CREATE INDEX idx_profiles_active ON profiles(is_active);
+CREATE INDEX idx_songs_title ON songs(title);
+CREATE INDEX idx_songs_artist ON songs(artist);
+CREATE INDEX idx_songs_added_by ON songs(added_by);
+CREATE INDEX idx_songs_deezer_id ON songs(deezer_id);
 
 -- Políticas RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
@@ -248,6 +328,7 @@ ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE musicians ENABLE ROW LEVEL SECURITY;
 ALTER TABLE event_musicians ENABLE ROW LEVEL SECURITY;
 ALTER TABLE musician_substitutes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
 
 -- Permisos básicos
 GRANT SELECT ON profiles TO anon;
@@ -258,6 +339,8 @@ GRANT SELECT ON musicians TO anon;
 GRANT ALL PRIVILEGES ON musicians TO authenticated;
 GRANT ALL PRIVILEGES ON event_musicians TO authenticated;
 GRANT ALL PRIVILEGES ON musician_substitutes TO authenticated;
+GRANT SELECT ON songs TO anon;
+GRANT ALL PRIVILEGES ON songs TO authenticated;
 
 -- Datos iniciales
 INSERT INTO musicians (name, instrument, is_main) VALUES
@@ -268,4 +351,10 @@ INSERT INTO musicians (name, instrument, is_main) VALUES
 
 INSERT INTO profiles (email, full_name, role, permissions, is_active) VALUES
 ('admin@tribeca.com', 'Administrador TriBeCa', 'admin', '{"create": true, "edit": true, "delete": true}', true);
+
+-- Datos iniciales de canciones de ejemplo
+INSERT INTO songs (title, artist, album, duration, deezer_id, preview_url, album_cover) VALUES
+('Bohemian Rhapsody', 'Queen', 'A Night at the Opera', 355, '3135556', 'https://cdns-preview-d.dzcdn.net/stream/c-deda7fa9316d9e9e880d2c6207e92260-8.mp3', 'https://api.deezer.com/album/302127/image'),
+('Hotel California', 'Eagles', 'Hotel California', 391, '14808965', 'https://cdns-preview-d.dzcdn.net/stream/c-d1c5f5c5c5c5c5c5c5c5c5c5c5c5c5c5-8.mp3', 'https://api.deezer.com/album/1652248/image'),
+('Sweet Child O Mine', 'Guns N Roses', 'Appetite for Destruction', 356, '1109731', 'https://cdns-preview-d.dzcdn.net/stream/c-a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6-8.mp3', 'https://api.deezer.com/album/119606/image');
 ```

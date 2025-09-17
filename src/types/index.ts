@@ -161,3 +161,68 @@ export interface RegisterForm {
   name: string;
   role: User['role'];
 }
+
+// Tipos para canciones
+export interface Song {
+  id: string;
+  title: string;
+  artist: string;
+  album?: string;
+  duration?: number; // Duración en segundos
+  deezer_id?: string;
+  preview_url?: string;
+  album_cover?: string;
+  added_by?: string;
+  key_signature?: string; // Tono musical en notación inglesa
+  created_at: string;
+}
+
+// Tipos para la API de Deezer
+export interface DeezerTrack {
+  id: string;
+  title: string;
+  title_short: string;
+  link: string;
+  duration: number;
+  rank: number;
+  explicit_lyrics: boolean;
+  preview: string;
+  artist: {
+    id: string;
+    name: string;
+    link: string;
+    picture: string;
+    picture_small: string;
+    picture_medium: string;
+    picture_big: string;
+    picture_xl: string;
+  };
+  album: {
+    id: string;
+    title: string;
+    cover: string;
+    cover_small: string;
+    cover_medium: string;
+    cover_big: string;
+    cover_xl: string;
+  };
+  type: string;
+}
+
+export interface DeezerSearchResponse {
+  data: DeezerTrack[];
+  total: number;
+  next?: string;
+}
+
+// Formulario para agregar canciones
+export interface AddSongForm {
+  title: string;
+  artist: string;
+  album?: string;
+  duration?: number;
+  deezer_id?: string;
+  preview_url?: string;
+  album_cover?: string;
+  key_signature?: string; // Tono musical en notación inglesa
+}

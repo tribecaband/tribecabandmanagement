@@ -9,6 +9,7 @@ import CompactCalendar from '../components/CompactCalendar'
 import CalendarPreview from '../components/CalendarPreview'
 import SessionAlert from '../components/SessionAlert'
 import Users from './Users'
+import Songs from './Songs'
 import toast from 'react-hot-toast'
 
 export default function Dashboard() {
@@ -20,7 +21,7 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [showEventModal, setShowEventModal] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<EventType | null>(null)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'songs'>('dashboard')
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
@@ -245,6 +246,20 @@ export default function Dashboard() {
                 <span>Usuarios</span>
               </div>
             </button>
+            
+            <button
+              onClick={() => setActiveTab('songs')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'songs'
+                  ? 'border-[#2DB2CA] text-[#2DB2CA]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Music className="h-4 w-4" />
+                <span>Canciones</span>
+              </div>
+            </button>
           </div>
         </div>
       </header>
@@ -340,8 +355,10 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'users' ? (
         <Users />
+      ) : (
+        <Songs />
       )}
 
       {/* Event Modal */}
