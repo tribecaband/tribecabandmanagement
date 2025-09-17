@@ -6,11 +6,11 @@ import SessionAlert from './SessionAlert'
 
 const Layout: React.FC = () => {
   const location = useLocation()
-  const { profile, user, logout } = useAuthStore()
+  const { profile, user, signOut } = useAuthStore()
 
   const handleLogout = async () => {
     try {
-      await logout()
+      await signOut()
     } catch (error) {
       console.error('Error during logout:', error)
     }

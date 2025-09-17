@@ -102,11 +102,32 @@ const getMockSearchResults = (query: string): DeezerSearchResponse => {
       {
         id: 'mock-1',
         title: `Resultado simulado para "${query}"`,
-        artist: { name: 'Artista de ejemplo' },
-        album: { title: 'Álbum de ejemplo', cover_medium: '' },
+        title_short: `Resultado simulado para "${query}"`,
+        link: '',
         duration: 180,
+        rank: 0,
+        explicit_lyrics: false,
         preview: '',
-        link: ''
+        artist: {
+          id: 'mock-artist-1',
+          name: 'Artista de ejemplo',
+          link: '',
+          picture: '',
+          picture_small: '',
+          picture_medium: '',
+          picture_big: '',
+          picture_xl: ''
+        },
+        album: {
+          id: 'mock-album-1',
+          title: 'Álbum de ejemplo',
+          cover: '',
+          cover_small: '',
+          cover_medium: '',
+          cover_big: '',
+          cover_xl: ''
+        },
+        type: 'track'
       }
     ],
     total: 1,

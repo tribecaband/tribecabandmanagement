@@ -186,6 +186,7 @@ export default function Dashboard() {
               events={events}
               selectedDate={selectedDate}
               onDateSelect={setSelectedDate}
+              onEventClick={handleEventClick}
             />
           </div>
         </div>
@@ -280,7 +281,7 @@ export default function Dashboard() {
             setShowEventModal(false)
             setSelectedEvent(null)
           }}
-          onSave={handleSaveEvent}
+          onSave={handleEventSaved}
         />
       )}
     </div>
