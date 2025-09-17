@@ -1266,17 +1266,24 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                 Duración (minutos) *
               </label>
               <input
-                type="number"
-                step="15"
-                min="15"
-                max="720"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 {...register('duration', { 
                   required: 'La duración es requerida',
-                  min: { value: 15, message: 'La duración mínima es 15 minutos' },
-                  max: { value: 720, message: 'La duración máxima es 12 horas (720 minutos)' }
+                  pattern: {
+                    value: /^\d+$/,
+                    message: 'Solo se permiten números enteros'
+                  }
                 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
                 placeholder="Ej: 90, 120, 180..."
+                onKeyDown={(e) => {
+                  // Prevent arrow keys from changing values
+                  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                  }
+                }}
               />
               {errors.duration && <p className="text-red-500 text-sm mt-1">{errors.duration.message}</p>}
               {watchedDuration && watchedDuration > 0 && (
@@ -1331,14 +1338,24 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                 Importe Base (€)
               </label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]*\.?[0-9]*"
                 {...register('base_amount', { 
-                  min: { value: 0, message: 'El importe debe ser mayor o igual a 0' }
+                  min: { value: 0, message: 'El importe debe ser mayor o igual a 0' },
+                  pattern: {
+                    value: /^\d*\.?\d*$/,
+                    message: 'Solo se permiten números decimales'
+                  }
                 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
                 placeholder="0.00"
+                onKeyDown={(e) => {
+                  // Prevent arrow keys from changing values
+                  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                  }
+                }}
               />
               {errors.base_amount && <p className="text-red-500 text-sm mt-1">{errors.base_amount.message}</p>}
                 </div>
@@ -1362,11 +1379,18 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                       Importe IVA (€)
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
                       value={calculatedAmounts.ivaAmount.toFixed(2)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
                       readOnly
+                      onKeyDown={(e) => {
+                        // Prevent arrow keys from changing values
+                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                          e.preventDefault();
+                        }
+                      }}
                     />
                   </div>
                   
@@ -1375,11 +1399,18 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                       Total (€)
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
                       value={calculatedAmounts.totalAmount.toFixed(2)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 font-semibold"
                       readOnly
+                      onKeyDown={(e) => {
+                        // Prevent arrow keys from changing values
+                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                          e.preventDefault();
+                        }
+                      }}
                     />
                   </div>
               </div>
@@ -1394,13 +1425,24 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                     Importe Anticipo (€)
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*\.?[0-9]*"
                     {...register('advance_amount', {
-                      min: { value: 0, message: 'El anticipo debe ser positivo' }
+                      min: { value: 0, message: 'El anticipo debe ser positivo' },
+                      pattern: {
+                        value: /^\d*\.?\d*$/,
+                        message: 'Solo se permiten números decimales'
+                      }
                     })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
                     placeholder="0.00"
+                    onKeyDown={(e) => {
+                      // Prevent arrow keys from changing values
+                      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                        e.preventDefault();
+                      }
+                    }}
                   />
                   {errors.advance_amount && <p className="text-red-500 text-sm mt-1">{errors.advance_amount.message}</p>}
                 </div>
@@ -1424,11 +1466,18 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                       IVA Anticipo (€)
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
                       value={calculatedAmounts.advanceIvaAmount.toFixed(2)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
                       readOnly
+                      onKeyDown={(e) => {
+                        // Prevent arrow keys from changing values
+                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                          e.preventDefault();
+                        }
+                      }}
                     />
                   </div>
                   
@@ -1437,11 +1486,18 @@ export default function EventModal({ event, onClose, onSave }: EventModalProps) 
                       Total Anticipo (€)
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
                       value={calculatedAmounts.advanceTotalAmount.toFixed(2)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 font-semibold"
                       readOnly
+                      onKeyDown={(e) => {
+                        // Prevent arrow keys from changing values
+                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                          e.preventDefault();
+                        }
+                      }}
                     />
                   </div>
               </div>
