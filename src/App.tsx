@@ -1,29 +1,55 @@
-import React, { useEffect, useCallback } from 'react'
+import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { Toaster } from 'react-hot-toast'
-import { useAuthStore } from './store/authStore'
-import ProtectedRoute from './components/ProtectedRoute'
+import { Toaster } from 'sonner'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Users from './pages/Users'
+import Songs from './pages/Songs'
+import Layout from './components/Layout'
+import { useAuthStore } from './store/authStore'
 
-function App() {
-  const { initialize, loading } = useAuthStore()
-
-  const memoizedInitialize = useCallback(() => {
-    initialize()
-  }, [initialize])
-
-  useEffect(() => {
-    console.log('App useEffect running')
-    memoizedInitialize()
-  }, [memoizedInitialize])
-
+// Protected Route component
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuthStore()
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAF9ED] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2DB2CA] mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando aplicación...</p>
+          <p className="text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  return user ? <>{children}</> : <Navigate to="/login" replace />
+}
+
+function App() {
+  const { initialize, loading } = useAuthStore()
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        await initialize()
+      } catch (error) {
+        console.error('Error initializing auth:', error)
+      } finally {
+        setIsInitialized(true)
+      }
+    }
+
+    initAuth()
+  }, [])
+
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen bg-[#FAF9ED] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2DB2CA] mx-auto mb-4"></div>
+          <p className="text-gray-600">Inicializando aplicación...</p>
         </div>
       </div>
     )
@@ -38,35 +64,27 @@ function App() {
             path="/" 
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <Layout />
               </ProtectedRoute>
-            } 
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
+            }
+          >
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="users" element={<Users />} />
+            <Route path="songs" element={<Songs />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        
         <Toaster 
           position="top-right"
           toastOptions={{
             duration: 4000,
             style: {
-              background: '#fff',
-              color: '#333',
+              background: 'white',
+              color: '#374151',
               border: '1px solid #e5e7eb',
-              borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
             },
-            success: {
-              iconTheme: {
-                primary: '#2DB2CA',
-                secondary: '#fff'
-              }
-            },
-            error: {
-              iconTheme: {
-                primary: '#ef4444',
-                secondary: '#fff'
-              }
-            }
           }}
         />
       </div>

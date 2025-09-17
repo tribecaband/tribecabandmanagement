@@ -1,30 +1,23 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { Calendar, Plus, Search, Filter } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
+import { Event } from '../types'
 import { supabase } from '../lib/supabase'
-import { Calendar, Plus, Search, Filter, LogOut, Users as UsersIcon, Settings, Music } from 'lucide-react'
-import { Event as EventType } from '../types'
-import EventModal from '../components/EventModal'
 import EventCard from '../components/EventCard'
+import EventModal from '../components/EventModal'
 import CompactCalendar from '../components/CompactCalendar'
-import CalendarPreview from '../components/CalendarPreview'
-import SessionAlert from '../components/SessionAlert'
-import Users from './Users'
-import Songs from './Songs'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 export default function Dashboard() {
-  console.log('🏠 Dashboard component rendering...')
-  const { user, profile, signOut } = useAuthStore()
-  console.log('🏠 Dashboard auth state:', { user: !!user, profile: !!profile })
-  const [events, setEvents] = useState<EventType[]>([])
-  const [filteredEvents, setFilteredEvents] = useState<EventType[]>([])
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [showEventModal, setShowEventModal] = useState(false)
-  const [selectedEvent, setSelectedEvent] = useState<EventType | null>(null)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'songs'>('dashboard')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const { profile, user } = useAuthStore()
+  const [events, setEvents] = useState<Event[]>([])
+  const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const [showEventModal, setShowEventModal] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
 
   useEffect(() => {
@@ -131,7 +124,7 @@ export default function Dashboard() {
   }, [getBandFormat])
 
 
-  const handleEventClick = useCallback((event: EventType) => {
+  const handleEventClick = useCallback((event: Event) => {
     setSelectedEvent(event)
     setShowEventModal(true)
   }, [])
@@ -151,10 +144,7 @@ export default function Dashboard() {
     setSelectedDate(date)
   }, [])
 
-  const handleLogout = useCallback(async () => {
-    await signOut()
-    toast.success('Sesión cerrada correctamente')
-  }, [signOut])
+
 
   const handleDeleteEvent = useCallback(async (eventId: string) => {
     try {
@@ -174,199 +164,123 @@ export default function Dashboard() {
   }, [fetchEvents])
 
   if (loading) {
-    console.log('🏠 Dashboard showing loading screen')
     return (
-      <div className="min-h-screen bg-[#FAF9ED] flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-96">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2DB2CA] mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando eventos...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF9ED]">
-      {/* Session Alert */}
-      <SessionAlert />
-      
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <Calendar className="h-8 w-8 text-[#2DB2CA]" />
-              <h1 className="text-2xl font-bold text-gray-900">TriBeCa Band Management</h1>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <UsersIcon className="h-5 w-5 text-gray-600" />
-                <span className="text-sm text-gray-700">
-                  {profile?.full_name || user?.email}
-                </span>
-              </div>
-              
-              <button
-                onClick={handleLogout}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                <LogOut className="h-5 w-5" />
-                <span className="text-sm">Cerrar Sesión</span>
-              </button>
-            </div>
-          </div>
-          
-          {/* Navigation Tabs */}
-          <div className="flex space-x-8 border-t border-gray-200">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'dashboard'
-                  ? 'border-[#2DB2CA] text-[#2DB2CA]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4" />
-                <span>Dashboard</span>
-              </div>
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'users'
-                  ? 'border-[#2DB2CA] text-[#2DB2CA]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center space-x-2">
-                <UsersIcon className="h-4 w-4" />
-                <span>Usuarios</span>
-              </div>
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('songs')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'songs'
-                  ? 'border-[#2DB2CA] text-[#2DB2CA]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center space-x-2">
-                <Music className="h-4 w-4" />
-                <span>Canciones</span>
-              </div>
-            </button>
+    <div className="space-y-6">
+      {/* Dashboard content */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Calendar Section */}
+        <div className="lg:w-1/3">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Calendario</h2>
+            <CompactCalendar
+              events={events}
+              selectedDate={selectedDate}
+              onDateSelect={setSelectedDate}
+            />
           </div>
         </div>
-      </header>
 
-      {/* Main Content */}
-      {activeTab === 'dashboard' ? (
-        <div className="flex h-[calc(100vh-80px)]">
-          {/* Left Panel - Compact Calendar */}
-          <div className="w-80 bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
-            <div className="mb-6">
-              <div className="mb-3">
-                <h2 className="text-base font-semibold text-gray-800 flex items-center">
-                  <Calendar className="w-4 h-4 mr-2 text-[#2DB2CA]" />
-                  Vista Rápida
-                </h2>
-              </div>
-              <CompactCalendar 
-                events={events}
-                selectedDate={selectedDate}
-                onDateSelect={handleDateSelect}
-                onEventClick={handleEventClick}
-              />
-            </div>
-          </div>
-
-          {/* Right Panel - Events List */}
-          <div className="flex-1 p-6">
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-800">
-                  Lista de Eventos
-                </h2>
+        {/* Events Section */}
+        <div className="lg:w-2/3">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <h2 className="text-lg font-semibold text-gray-900">Eventos</h2>
                 <button
-              onClick={handleNewEvent}
-              className="bg-[#2DB2CA] text-white px-4 py-2 rounded-lg hover:bg-[#2DB2CA]/90 transition-colors flex items-center space-x-2"
-            >
-              <Plus size={20} />
-              <span>Nuevo Evento</span>
-            </button>
+                  onClick={() => setShowEventModal(true)}
+                  className="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nuevo Evento
+                </button>
               </div>
-
-              {/* Search and Filters */}
-              <div className="flex space-x-4 mb-6">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              
+              {/* Search and Filter */}
+              <div className="mt-4 flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Buscar eventos..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
                 </div>
                 <div className="relative">
-                  <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent appearance-none bg-white"
+                    className="pl-10 pr-8 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none bg-white"
                   >
                     <option value="all">Todos los estados</option>
-                    <option value="no">Sin Facturar</option>
-                    <option value="yes">Facturado</option>
-                    <option value="advance">Anticipo Facturado</option>
+                    <option value="scheduled">Programado</option>
+                    <option value="in_progress">En progreso</option>
+                    <option value="completed">Completado</option>
+                    <option value="cancelled">Cancelado</option>
                   </select>
                 </div>
               </div>
             </div>
-
+            
             {/* Events List */}
-            <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-300px)]">
+            <div className="p-6">
               {filteredEvents.length === 0 ? (
                 <div className="text-center py-12">
-                  <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg mb-2">No hay eventos para mostrar</p>
-                  <p className="text-gray-400 text-sm">
-                    {searchTerm || statusFilter !== 'all' 
-                      ? 'Intenta ajustar los filtros de búsqueda'
-                      : 'Crea tu primer evento haciendo clic en "Nuevo Evento"'
-                    }
+                  <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay eventos</h3>
+                  <p className="text-gray-500 mb-4">
+                    {searchTerm || statusFilter !== 'all'
+                      ? 'No se encontraron eventos con los filtros aplicados.'
+                      : 'Comienza creando tu primer evento.'}
                   </p>
+                  {!searchTerm && statusFilter === 'all' && (
+                    <button
+                      onClick={() => setShowEventModal(true)}
+                      className="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 transition-colors"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Crear Evento
+                    </button>
+                  )}
                 </div>
               ) : (
-                filteredEvents.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    onClick={() => handleEventClick(event)}
-                    onDelete={handleDeleteEvent}
-                  />
-                ))
+                <div className="space-y-4">
+                  {filteredEvents.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onClick={() => setSelectedEvent(event)}
+                      onDelete={handleDeleteEvent}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           </div>
         </div>
-      ) : activeTab === 'users' ? (
-        <Users />
-      ) : (
-        <Songs />
-      )}
+      </div>
 
       {/* Event Modal */}
       {showEventModal && (
         <EventModal
           event={selectedEvent}
-          onClose={() => setShowEventModal(false)}
-          onSave={handleEventSaved}
+          onClose={() => {
+            setShowEventModal(false)
+            setSelectedEvent(null)
+          }}
+          onSave={handleSaveEvent}
         />
       )}
     </div>

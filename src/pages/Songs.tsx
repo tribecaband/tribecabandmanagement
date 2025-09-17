@@ -383,31 +383,27 @@ const Songs: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#FAF9ED] to-white flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2DB2CA] mx-auto mb-4"></div>
-          <p className="text-[#BDB3A4] text-lg">Cargando canciones...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">Cargando canciones...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#FAF9ED] to-white">
+    <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center space-x-3">
-            <Music className="h-8 w-8 text-[#2DB2CA]" />
-            <h1 className="text-3xl font-bold text-gray-900">Canciones</h1>
-            <span className="bg-[#2DB2CA] text-white px-3 py-1 rounded-full text-sm font-medium">
-              {songs.length} canciones
-            </span>
-          </div>
+      <div className="mb-8">
+        <div className="flex items-center space-x-3">
+          <Music className="h-8 w-8 text-purple-500" />
+          <h1 className="text-3xl font-bold text-gray-900">Canciones</h1>
+          <span className="bg-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+            {songs.length} canciones
+          </span>
         </div>
       </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Búsqueda unificada */}
         <div className="mb-8 relative">
           <div className="relative" ref={searchRef}>
@@ -418,11 +414,11 @@ const Songs: React.FC = () => {
               value={unifiedQuery}
               onChange={(e) => setUnifiedQuery(e.target.value)}
               onFocus={() => unifiedQuery && deezerResults.length > 0 && setShowDropdown(true)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent bg-white shadow-sm text-lg"
+              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white shadow-sm text-lg"
             />
             {deezerLoading && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#2DB2CA]"></div>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-500"></div>
               </div>
             )}
           </div>
@@ -435,9 +431,9 @@ const Songs: React.FC = () => {
             >
               <div className="p-3 border-b border-gray-100">
                 <div className="flex items-center text-sm text-gray-600">
-                  <Plus className="h-4 w-4 mr-2 text-[#2DB2CA]" />
+                  <Plus className="h-4 w-4 mr-2 text-purple-500" />
                   <span className="font-medium">Agregar desde Deezer</span>
-                  <span className="ml-2 bg-[#2DB2CA] text-white px-2 py-1 rounded-full text-xs font-medium">
+                  <span className="ml-2 bg-purple-500 text-white px-2 py-1 rounded-full text-xs font-medium">
                     {deezerResults.length}
                   </span>
                 </div>
@@ -532,7 +528,7 @@ const Songs: React.FC = () => {
                           <button
                             onClick={() => handleAddFromDeezer(track)}
                             disabled={addingFromDeezer === track.id}
-                            className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-[#2DB2CA] text-white hover:bg-[#2DB2CA]/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-purple-500 text-white hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {addingFromDeezer === track.id ? (
                               <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
@@ -566,9 +562,9 @@ const Songs: React.FC = () => {
         {filteredSongs.length > 0 && (
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-              <Music className="h-5 w-5 mr-2 text-[#2DB2CA]" />
+              <Music className="h-5 w-5 mr-2 text-purple-500" />
               Tu Repertorio
-              <span className="ml-2 bg-[#BDB3A4] text-white px-2 py-1 rounded-full text-sm font-medium">
+              <span className="ml-2 bg-purple-500 text-white px-2 py-1 rounded-full text-sm font-medium">
                 {filteredSongs.length}
               </span>
             </h2>
@@ -689,7 +685,7 @@ const Songs: React.FC = () => {
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <button
                               onClick={() => handleDeleteSong(song.id, song.title)}
-                              className="text-[#E58483] hover:text-[#E58483]/80 transition-colors p-1 rounded"
+                              className="text-red-500 hover:text-red-600 transition-colors p-1 rounded"
                               title="Eliminar canción"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -792,7 +788,7 @@ const Songs: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleDeleteSong(song.id, song.title)}
-                          className="text-[#E58483] hover:text-[#E58483]/80 transition-colors p-1 rounded"
+                          className="text-red-500 hover:text-red-600 transition-colors p-1 rounded"
                           title="Eliminar canción"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -818,10 +814,9 @@ const Songs: React.FC = () => {
             </p>
           </div>
         )}
-      </div>
-
-      {/* Modal de confirmación para eliminar */}
-      {deleteModal.isOpen && (
+        
+        {/* Modal de confirmación para eliminar */}
+        {deleteModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
             <div className="p-6">
@@ -853,7 +848,7 @@ const Songs: React.FC = () => {
                 <button
                   onClick={cancelDeleteSong}
                   disabled={isDeleting}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2DB2CA] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Cancelar
                 </button>

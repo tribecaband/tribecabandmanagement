@@ -3,7 +3,7 @@ import { Users as UsersIcon, Plus, Search, Edit, Trash2, Shield, ShieldCheck } f
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { Profile } from '../lib/supabase'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface UserWithRole extends Profile {
   role: 'admin' | 'user'
@@ -189,9 +189,9 @@ const Users: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FAF9ED] flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2DB2CA] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Cargando usuarios...</p>
           {!user && (
             <p className="text-sm text-gray-500 mt-2">Esperando autenticación...</p>
@@ -203,13 +203,13 @@ const Users: React.FC = () => {
 
   if (error && !user) {
     return (
-      <div className="min-h-screen bg-[#FAF9ED] flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <UsersIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <p className="text-gray-600 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-[#2DB2CA] text-white rounded-lg hover:bg-[#25a0b8] transition-colors text-sm"
+            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm"
           >
             Recargar página
           </button>
@@ -220,35 +220,32 @@ const Users: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#FAF9ED] p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center py-12">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-4">
-              <UsersIcon className="mx-auto h-12 w-12 text-red-400 mb-4" />
-              <p className="text-red-700 font-medium mb-2">Error al cargar usuarios</p>
-              <p className="text-red-600 text-sm">{error}</p>
-            </div>
-            <button
-              onClick={() => {
-                setRetryCount(prev => prev + 1)
-              }}
-              className="px-4 py-2 bg-[#2DB2CA] text-white rounded-lg hover:bg-[#25a0b8] transition-colors text-sm"
-            >            Reintentar
-            </button>
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="text-center py-12">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-4">
+            <UsersIcon className="mx-auto h-12 w-12 text-red-400 mb-4" />
+            <p className="text-red-700 font-medium mb-2">Error al cargar usuarios</p>
+            <p className="text-red-600 text-sm">{error}</p>
           </div>
+          <button
+            onClick={() => {
+              setRetryCount(prev => prev + 1)
+            }}
+            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm"
+          >            Reintentar
+          </button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF9ED] p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto p-6">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <UsersIcon className="h-8 w-8 text-[#2DB2CA]" />
+              <UsersIcon className="h-8 w-8 text-purple-500" />
               <h1 className="text-3xl font-bold text-gray-900">Gestión de Usuarios</h1>
             </div>
             <button
@@ -257,7 +254,7 @@ const Users: React.FC = () => {
                 setFormData({ full_name: '', email: '', role: 'user' })
                 setShowModal(true)
               }}
-              className="bg-[#2DB2CA] hover:bg-[#2DB2CA]/90 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+              className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
             >
               <Plus className="h-5 w-5" />
               <span>Nuevo Usuario</span>
@@ -274,7 +271,7 @@ const Users: React.FC = () => {
               placeholder="Buscar usuarios..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
         </div>
@@ -307,7 +304,7 @@ const Users: React.FC = () => {
                   <tr key={user.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="h-10 w-10 rounded-full bg-[#2DB2CA] flex items-center justify-center">
+                        <div className="h-10 w-10 rounded-full bg-purple-500 flex items-center justify-center">
                           <span className="text-white font-medium">
                             {user.full_name?.charAt(0).toUpperCase() || 'U'}
                           </span>
@@ -327,7 +324,7 @@ const Users: React.FC = () => {
                         onClick={() => toggleRole(user)}
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           user.role === 'admin'
-                            ? 'bg-[#2DB2CA]/10 text-[#2DB2CA]'
+                            ? 'bg-purple-100 text-purple-700'
                             : 'bg-gray-100 text-gray-800'
                         }`}
                       >
@@ -346,7 +343,7 @@ const Users: React.FC = () => {
                       <div className="flex items-center justify-end space-x-2">
                         <button
                           onClick={() => handleEdit(user)}
-                          className="text-[#2DB2CA] hover:text-[#2DB2CA]/80 p-1"
+                          className="text-purple-500 hover:text-purple-600 p-1"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
@@ -376,10 +373,9 @@ const Users: React.FC = () => {
             </p>
           </div>
         )}
-      </div>
 
-      {/* Modal */}
-      {showModal && (
+        {/* Modal */}
+        {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">
@@ -395,7 +391,7 @@ const Users: React.FC = () => {
                   type="text"
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   required
                 />
               </div>
@@ -409,7 +405,7 @@ const Users: React.FC = () => {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     required
                   />
                 </div>
@@ -422,7 +418,7 @@ const Users: React.FC = () => {
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'user' })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#2DB2CA] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 >
                   <option value="user">Usuario</option>
                   <option value="admin">Administrador</option>
@@ -443,7 +439,7 @@ const Users: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-[#2DB2CA] hover:bg-[#2DB2CA]/90 rounded-md transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-white bg-purple-500 hover:bg-purple-600 rounded-md transition-colors"
                 >
                   {editingUser ? 'Actualizar' : 'Crear'}
                 </button>
@@ -453,7 +449,7 @@ const Users: React.FC = () => {
         </div>
       )}
     </div>
-  )
-}
+  );
+};
 
-export default Users
+export default Users;
