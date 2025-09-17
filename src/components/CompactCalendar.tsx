@@ -86,7 +86,7 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
         >
           <span className="z-10">{day}</span>
           {dayEvents.length > 0 && !isSelected && !isToday && (
-            <div className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 text-white rounded-full flex items-center justify-center text-[10px] font-medium px-0.5 ${
+            <div className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-4 text-white rounded-full flex items-center justify-center text-[9px] font-medium px-1 ${
               dayEvents.length === 1 ? 'bg-blue-500' :
               dayEvents.length === 2 ? 'bg-orange-500' :
               dayEvents.length >= 3 ? 'bg-red-500' : 'bg-gray-400'
@@ -190,19 +190,19 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
     }
 
     return (
-      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+      <div className="space-y-2 max-h-40 overflow-y-auto">
         {dayEvents.slice(0, 4).map((event) => (
           <div
             key={event.id}
             onClick={() => onEventClick(event)}
-            className="p-2 bg-white border border-gray-200 rounded-md cursor-pointer hover:border-[#2DB2CA] transition-colors group"
+            className="p-3 bg-white border border-gray-200 rounded-md cursor-pointer hover:border-[#2DB2CA] transition-colors group"
           >
             {/* Título y Hora */}
             <div className="flex items-center justify-between mb-1">
-              <div className="font-medium text-xs text-gray-800 truncate group-hover:text-[#2DB2CA] flex-1 pr-2">
+              <div className="font-medium text-sm text-gray-800 truncate group-hover:text-[#2DB2CA] flex-1 pr-2">
                 {event.name}
               </div>
-              <div className="text-[10px] text-gray-500 font-medium flex-shrink-0">
+              <div className="text-xs text-gray-500 font-medium flex-shrink-0">
                 {new Date(event.event_date).toLocaleTimeString('es-ES', {
                   hour: '2-digit',
                   minute: '2-digit'
@@ -211,12 +211,12 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
             </div>
 
             {/* Ubicación */}
-            <div className="text-[10px] text-gray-600 truncate mb-1">
+            <div className="text-xs text-gray-600 truncate mb-1">
               📍 {getLocationText(event.location) || 'Falta añadir lugar'}
             </div>
 
             {/* Tipo de Evento y Formato */}
-            <div className="flex items-center justify-between text-[10px]">
+            <div className="flex items-center justify-between text-xs">
               <div className="text-blue-600 font-medium">
                 {getEventTypeText(event.event_types)}
               </div>
@@ -247,11 +247,11 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
 
   return (
     <div className="space-y-4">
-      {/* Compact Header */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <button
           onClick={() => navigateMonth('prev')}
-          className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
+          className="p-2 hover:bg-gray-100 rounded-md transition-colors"
         >
           <ChevronLeft size={16} className="text-gray-600" />
         </button>
@@ -267,18 +267,18 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
         
         <button
           onClick={() => navigateMonth('next')}
-          className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
+          className="p-2 hover:bg-gray-100 rounded-md transition-colors"
         >
           <ChevronRight size={16} className="text-gray-600" />
         </button>
       </div>
 
-      {/* Compact Calendar Grid */}
+      {/* Calendar Grid */}
       <div className="bg-white border border-gray-200 rounded-lg p-3">
         {/* Days of week header */}
         <div className="grid grid-cols-7 gap-1 mb-2">
           {DAYS_SHORT.map((day) => (
-            <div key={day} className="h-6 flex items-center justify-center text-[10px] font-medium text-gray-500">
+            <div key={day} className="h-6 flex items-center justify-center text-xs font-medium text-gray-500">
               {day}
             </div>
           ))}
@@ -292,7 +292,7 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
 
       {/* Selected Date Info */}
       <div>
-        <div className="flex items-center space-x-2 mb-2">
+        <div className="flex items-center space-x-2 mb-3">
           <Calendar size={14} className="text-[#2DB2CA]" />
           <h4 className="text-sm font-medium text-gray-700">
             {selectedDate.toLocaleDateString('es-ES', { 
@@ -304,25 +304,25 @@ export default function CompactCalendar({ events, selectedDate, onDateSelect, on
         {renderSelectedDateEvents()}
       </div>
 
-      {/* Compact Legend */}
-      <div className="text-[10px] text-gray-500 space-y-1 bg-gray-50 p-2 rounded-md">
+      {/* Legend */}
+      <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-1">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
               <span>1</span>
             </div>
             <div className="flex items-center space-x-1">
-              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
               <span>2</span>
             </div>
             <div className="flex items-center space-x-1">
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
               <span>3+</span>
             </div>
           </div>
           <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-[#2DB2CA] rounded-full"></div>
+            <div className="w-3 h-3 bg-[#2DB2CA] rounded-full"></div>
             <span>Hoy/Selec.</span>
           </div>
         </div>

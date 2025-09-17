@@ -179,7 +179,7 @@ export default function Dashboard() {
       {/* Dashboard content */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Calendar Section */}
-        <div className="lg:w-1/3">
+        <div className="lg:w-1/3 xl:w-1/4 2xl:w-1/5">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Calendario</h2>
             <CompactCalendar
@@ -192,7 +192,7 @@ export default function Dashboard() {
         </div>
 
         {/* Events Section */}
-        <div className="lg:w-2/3">
+        <div className="lg:w-2/3 xl:w-3/4 2xl:w-4/5">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-6 border-b border-gray-200">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
